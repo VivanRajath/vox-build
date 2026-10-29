@@ -8,6 +8,8 @@ import History from "./components/History.jsx";
 import AccountMenu from "./components/AccountMenu.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
 import GitHubModal from "./components/GitHubModal.jsx";
+import Composer from "./components/Composer.jsx";
+import { DownloadIcon, GitHubIcon, LinkIcon, Logo } from "./components/icons.jsx";
 
 const TIER_LABEL = { research: "Researcher", jnr: "Junior dev", snr: "Senior dev", architect: "Architect" };
 
@@ -56,6 +58,8 @@ export default function App() {
   const [reloadKey, setReloadKey] = useState(0);
   const [user, setUser] = useState(null);
   const [dialog, setDialog] = useState(null); // "settings" | "github"
+  const [tab, setTab] = useState("activity");
+  const [copied, setCopied] = useState(false);
   const nextId = useRef(1);
 
   const addLog = useCallback((entry) => {
@@ -142,22 +146,48 @@ export default function App() {
     }
   };
 
-  if (projectError) return <div className="fatal">Couldn't reach the backend: {projectError}</div>;
-  if (!projectId || !meta) return <div className="fatal">Loading…</div>;
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* clipboard blocked: nothing to confirm */
+    }
+  };
+
+  if (projectError) {
+    return (
+      <div className="fatal">
+        <p><strong>Can't reach the VoiceSite server.</strong></p>
+        <p>{projectError}. Check that the backend is running, then reload the page.</p>
+      </div>
+    );
+  }
+  if (!projectId || !meta) return <div className="fatal" aria-busy="true"><span className="progress" /></div>;
+
+  const isBlank = meta.current === 0 && meta.versions.length === 1;
+  const latest = meta.versions.length ? meta.versions[meta.versions.length - 1].n : 0;
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-dot" />
-          VoiceSite
-          <span className="brand-sub">talk to your website</span>
+          <Logo />
+          <span className="brand-name">VoiceSite</span>
+          <span className="brand-sep" aria-hidden="true">/</span>
+          <span className="project-name" title={meta.brief?.business || "Untitled site"}>{meta.brief?.business || "Untitled site"}</span>
         </div>
         <div className="topbar-actions">
-          <button className="ghost hide-sm" onClick={() => navigator.clipboard?.writeText(location.href)}>Copy link</button>
-          <a className="ghost hide-sm" href={`/preview/${projectId}/`} target="_blank" rel="noreferrer">Open site ↗</a>
-          <a className="ghost" href={api.downloadUrl(projectId)} download>Download ZIP</a>
-          <button className="ghost" onClick={() => setDialog("github")}>Push to GitHub</button>
+          <button className="btn quiet hide-sm" onClick={copyLink}>
+            <LinkIcon /> {copied ? "Link copied" : "Copy link"}
+          </button>
+          <a className="btn quiet" href={api.downloadUrl(projectId)} download title="Download the site as a ZIP">
+            <DownloadIcon /> <span className="hide-sm">Download ZIP</span>
+          </a>
+          <button className="btn primary" onClick={() => setDialog("github")}>
+            <GitHubIcon /> <span>Push to GitHub</span>
+          </button>
           <AccountMenu
             user={user}
             auth={config?.auth}
@@ -179,7 +209,7 @@ export default function App() {
           onClose={() => setDialog(null)}
           onPushed={(res) => {
             setMeta((m) => ({ ...m, github: { repo: res.repo, url: res.url } }));
-            addLog({ kind: "done", text: `Pushed v${meta.current} to GitHub: ${res.repo}` });
+            addLog({ kind: "done", text: `Pushed version ${meta.current} to ${res.repo} on GitHub.` });
           }}
         />
       )}
@@ -188,6 +218,7 @@ export default function App() {
         <Preview
           projectId={projectId}
           version={meta.current}
+          latest={latest}
           reloadKey={reloadKey}
           busy={busy}
           tierLabel={TIER_LABEL}
@@ -202,22 +233,35 @@ export default function App() {
             config={config}
             userHasKey={!!user?.llm?.has_key}
             onOpenSettings={user ? () => setDialog("settings") : null}
-            busy={busy}
             picking={picking}
             onTogglePick={() => setPicking((p) => !p)}
             selection={selection}
             onClearSelection={clearSelection}
-            onCommand={sendCommand}
-            isBlank={meta.current === 0 && meta.versions.length === 1}
+            isBlank={isBlank}
           />
-          <ActivityLog entries={log} tierLabel={TIER_LABEL} />
-          <History
-            versions={meta.versions}
-            current={meta.current}
-            tierLabel={TIER_LABEL}
-            onUndo={() => api.undo(projectId)}
-            onRestore={(n) => api.restore(projectId, n)}
-          />
+
+          <div className="tabs" role="tablist" aria-label="Sidebar">
+            {[["activity", "Activity"], ["versions", `Versions (${meta.versions.length})`]].map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? "is-on" : ""} onClick={() => setTab(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="tab-panel" role="tabpanel">
+            {tab === "activity" ? (
+              <ActivityLog entries={log} tierLabel={TIER_LABEL} isBlank={isBlank} />
+            ) : (
+              <History
+                versions={meta.versions}
+                current={meta.current}
+                tierLabel={TIER_LABEL}
+                onUndo={() => api.undo(projectId)}
+                onRestore={(n) => api.restore(projectId, n)}
+              />
+            )}
+          </div>
+
+          <Composer busy={busy} isBlank={isBlank} onCommand={sendCommand} />
         </aside>
       </main>
     </div>

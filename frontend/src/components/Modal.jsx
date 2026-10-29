@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { CloseIcon } from "./icons.jsx";
 
 export default function Modal({ title, onClose, children }) {
   useEffect(() => {
@@ -12,7 +13,7 @@ export default function Modal({ title, onClose, children }) {
       <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <h3>{title}</h3>
-          <button className="chip-x" onClick={onClose} aria-label="Close">×</button>
+          <button className="icon-btn" onClick={onClose} aria-label="Close"><CloseIcon /></button>
         </div>
         {children}
       </div>

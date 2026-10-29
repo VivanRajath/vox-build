@@ -47,9 +47,9 @@ export default function GitHubModal({ projectId, meta, user, auth, onClose, onPu
       <>
         <p className="modal-sub">Connect your GitHub account so VoiceSite can create a repository and push your site to it.</p>
         {auth?.github ? (
-          <a className="primary" href={api.loginUrl("github")}>Connect GitHub</a>
+          <a className="btn primary" href={api.loginUrl("github")}>Connect GitHub</a>
         ) : (
-          <p className="empty">GitHub isn't configured on the server (GITHUB_CLIENT_ID/SECRET).</p>
+          <p className="muted-text">GitHub isn't configured on the server (GITHUB_CLIENT_ID/SECRET).</p>
         )}
       </>
     );
@@ -61,8 +61,8 @@ export default function GitHubModal({ projectId, meta, user, auth, onClose, onPu
         </p>
         <div className="modal-actions">
           <span className="spacer" />
-          <button className="ghost" onClick={onClose}>Close</button>
-          <a className="primary" href={result.url} target="_blank" rel="noreferrer">Open repository ↗</a>
+          <button className="btn" onClick={onClose}>Close</button>
+          <a className="btn primary" href={result.url} target="_blank" rel="noreferrer">Open repository</a>
         </div>
       </>
     );
@@ -84,11 +84,11 @@ export default function GitHubModal({ projectId, meta, user, auth, onClose, onPu
           <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
           Make it private (only applies when creating the repo)
         </label>
-        {error && <div className="alert">{error}</div>}
+        {error && <div className="notice is-error">{error}</div>}
         <div className="modal-actions">
           <span className="spacer" />
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="submit" className="primary" disabled={busy || !repo.trim()}>
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn primary" disabled={busy || !repo.trim()}>
             {busy ? "Pushing…" : "Push to GitHub"}
           </button>
         </div>

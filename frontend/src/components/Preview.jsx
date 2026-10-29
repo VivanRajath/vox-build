@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { DesktopIcon, ExternalIcon, PhoneIcon, TabletIcon } from "./icons.jsx";
 
-const DEVICES = { desktop: "100%", tablet: "820px", mobile: "390px" };
+const DEVICES = {
+  desktop: { width: "100%", label: "Desktop", Icon: DesktopIcon },
+  tablet: { width: "820px", label: "Tablet", Icon: TabletIcon },
+  mobile: { width: "390px", label: "Mobile", Icon: PhoneIcon },
+};
 
-export default function Preview({ projectId, version, reloadKey, busy, tierLabel, picking, selection, onSelect }) {
+export default function Preview({ projectId, version, latest, reloadKey, busy, tierLabel, picking, selection, onSelect }) {
   const frameRef = useRef(null);
   const scrollY = useRef(0);
   const [device, setDevice] = useState("desktop");
@@ -43,32 +48,44 @@ export default function Preview({ projectId, version, reloadKey, busy, tierLabel
   };
 
   return (
-    <section className="preview">
-      <div className="preview-toolbar">
-        <div className="device-toggle" role="group" aria-label="Preview size">
-          {Object.keys(DEVICES).map((d) => (
-            <button key={d} className={d === device ? "active" : ""} onClick={() => setDevice(d)}>
-              {d}
+    <section className="preview" aria-label="Website preview">
+      <div className="preview-bar">
+        <div className="segmented" role="group" aria-label="Preview size">
+          {Object.entries(DEVICES).map(([id, { label, Icon }]) => (
+            <button key={id} className={id === device ? "is-on" : ""} onClick={() => setDevice(id)} aria-pressed={id === device} title={label}>
+              <Icon /> <span>{label}</span>
             </button>
           ))}
         </div>
-        <span className="preview-version">v{version}</span>
+        <div className="address" title="Preview address">
+          <span className="address-path">/preview/{projectId}/</span>
+          <span className="address-version">
+            v{version}
+            {latest > version ? ` of ${latest}` : ""}
+          </span>
+        </div>
+        <a className="icon-btn" href={`/preview/${projectId}/`} target="_blank" rel="noreferrer" title="Open in a new tab" aria-label="Open in a new tab">
+          <ExternalIcon />
+        </a>
       </div>
 
-      <div className="preview-stage">
-        <div className={`frame-wrap ${flash ? "flash" : ""} ${picking ? "picking" : ""}`} style={{ width: DEVICES[device] }}>
+      <div className="stage">
+        <div className={`frame ${flash ? "is-updated" : ""} ${picking ? "is-picking" : ""}`} style={{ width: DEVICES[device].width }}>
+          {busy && (
+            <div className="frame-status" role="status">
+              <span className="progress" aria-hidden="true" />
+              <span className="frame-status-text">
+                <strong>{tierLabel[busy.tier] || "Vox"}</strong> is working on "{busy.instruction}"
+              </span>
+            </div>
+          )}
+          {picking && !busy && (
+            <div className="frame-status is-picking" role="status">
+              <span className="frame-status-text">Click any element on the page, then say what to change about it.</span>
+            </div>
+          )}
           <iframe ref={frameRef} key={src} src={src} title="Website preview" onLoad={onLoad} />
         </div>
-
-        {busy && (
-          <div className="busy-pill">
-            <span className="spinner" />
-            <span>
-              <strong>{tierLabel[busy.tier] || "Vox"}</strong> is working on “{busy.instruction}”
-            </span>
-          </div>
-        )}
-        {picking && <div className="pick-hint">Click any element on the page, then say what to change</div>}
       </div>
     </section>
   );

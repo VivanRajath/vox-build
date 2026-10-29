@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
+import { GitHubIcon, GoogleIcon } from "./icons.jsx";
 
 function SignInButtons({ auth }) {
   if (!auth?.google && !auth?.github) {
-    return <p className="empty">Sign-in isn't configured. Set GOOGLE_CLIENT_ID/SECRET or GITHUB_CLIENT_ID/SECRET on the server.</p>;
+    return <p className="muted-text">Sign-in isn't configured. Set GOOGLE_CLIENT_ID/SECRET or GITHUB_CLIENT_ID/SECRET on the server.</p>;
   }
   return (
     <div className="signin-buttons">
-      {auth.google && <a className="ghost signin" href={api.loginUrl("google")}>Continue with Google</a>}
-      {auth.github && <a className="ghost signin" href={api.loginUrl("github")}>Continue with GitHub</a>}
+      {auth.google && <a className="btn signin" href={api.loginUrl("google")}><GoogleIcon /> Continue with Google</a>}
+      {auth.github && <a className="btn signin" href={api.loginUrl("github")}><GitHubIcon /> Continue with GitHub</a>}
     </div>
   );
 }
@@ -22,8 +23,13 @@ export default function AccountMenu({ user, auth, onOpenSettings, onSignedOut })
   useEffect(() => {
     if (!open) return;
     const close = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const signOut = async () => {
@@ -34,7 +40,7 @@ export default function AccountMenu({ user, auth, onOpenSettings, onSignedOut })
 
   return (
     <div className="account" ref={ref}>
-      <button className="ghost account-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button className="account-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         {user ? (
           <>
             {user.avatar ? <img className="avatar" src={user.avatar} alt="" referrerPolicy="no-referrer" /> : <span className="avatar" />}
@@ -57,14 +63,14 @@ export default function AccountMenu({ user, auth, onOpenSettings, onSignedOut })
                 {user.github ? (
                   <span className="muted">@{user.github.login}</span>
                 ) : auth?.github ? (
-                  <a className="link" href={api.loginUrl("github")}>Connect</a>
+                  <a className="text-btn" href={api.loginUrl("github")}>Connect</a>
                 ) : (
                   <span className="muted">not configured</span>
                 )}
               </div>
               <button className="menu-item" onClick={() => { setOpen(false); onOpenSettings(); }}>
                 AI model & API key
-                <span className="muted">{user.llm?.has_key ? user.llm.provider : "server default"}</span>
+                <span className="muted">{user.llm?.has_key ? user.llm.provider : "Server key"}</span>
               </button>
               <button className="menu-item" onClick={signOut}>Sign out</button>
             </>

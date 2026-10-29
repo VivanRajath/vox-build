@@ -103,7 +103,7 @@ export default function SettingsModal({ user, defaults, onClose, onSaved }) {
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={hasStoredKey ? `Saved key ${saved.key_hint || ""} (leave blank to keep)` : PROVIDERS.find((p) => p.id === provider).keyHint}
           />
-          <button className="ghost" onClick={loadModels} disabled={busy || (!apiKey.trim() && !hasStoredKey)}>
+          <button className="btn" onClick={loadModels} disabled={busy || (!apiKey.trim() && !hasStoredKey)}>
             Test & load models
           </button>
         </div>
@@ -130,15 +130,15 @@ export default function SettingsModal({ user, defaults, onClose, onSaved }) {
         </datalist>
       </div>
 
-      {status && <div className={status.error ? "alert" : "note"}>{status.text}</div>}
+      {status && <div className={status.error ? "notice is-error" : "notice is-ok"}>{status.text}</div>}
 
       <div className="modal-actions">
         {saved && (
-          <button className="ghost" onClick={reset} disabled={busy}>Use server default</button>
+          <button className="btn" onClick={reset} disabled={busy}>Use server default</button>
         )}
         <span className="spacer" />
-        <button className="ghost" onClick={onClose}>Cancel</button>
-        <button className="primary" onClick={save} disabled={busy || (!apiKey.trim() && !hasStoredKey)}>Save</button>
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" onClick={save} disabled={busy || (!apiKey.trim() && !hasStoredKey)}>Save</button>
       </div>
     </Modal>
   );
