@@ -7,7 +7,7 @@
   window.addEventListener("scroll", function () {
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(function () {
-      parent.postMessage({ source: "voicesite", type: "scroll", y: window.scrollY }, "*");
+      parent.postMessage({ source: "vox-build", type: "scroll", y: window.scrollY }, "*");
     }, 150);
   }, { passive: true });
 
@@ -63,7 +63,7 @@
     selected = e.target;
     show(selected);
     parent.postMessage({
-      source: "voicesite",
+      source: "vox-build",
       type: "select",
       selection: { path: cssPath(selected), html: selected.outerHTML.slice(0, 4000), label: label(selected) },
     }, "*");
@@ -71,7 +71,7 @@
 
   window.addEventListener("message", function (e) {
     var d = e.data || {};
-    if (d.source !== "voicesite-host") return;
+    if (d.source !== "vox-build-host") return;
     if (d.type === "scroll-to") {
       var y = +d.y || 0;
       if (document.readyState === "complete") window.scrollTo(0, y);

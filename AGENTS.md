@@ -1,4 +1,4 @@
-# VoiceSite agents
+# Vox Build agents
 
 ## Agent Hierarchy
 
@@ -7,7 +7,7 @@ Vox (Bolna voice agent)  ── bolna/agent_prompt.md, scripts/create_agent.py
 │   Talks to the user, calls custom functions:
 │   generate_site · edit_site · undo_change · describe_site
 │
-└── voicesite backend (orchestrator)  ── backend/main.py
+└── vox-build backend (orchestrator)  ── backend/main.py
     │
     ├── researcher ────────────────── backend/editor/research.py
     │     Design brief + real photos before building

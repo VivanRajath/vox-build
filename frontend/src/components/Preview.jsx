@@ -14,12 +14,12 @@ export default function Preview({ projectId, version, latest, reloadKey, busy, t
   const [flash, setFlash] = useState(false);
   const src = `/preview/${projectId}/?v=${version}&r=${reloadKey}`;
 
-  const post = (msg) => frameRef.current?.contentWindow?.postMessage({ source: "voicesite-host", ...msg }, "*");
+  const post = (msg) => frameRef.current?.contentWindow?.postMessage({ source: "vox-build-host", ...msg }, "*");
 
   useEffect(() => {
     const onMessage = (e) => {
       if (e.source !== frameRef.current?.contentWindow) return;
-      if (e.data?.source !== "voicesite") return;
+      if (e.data?.source !== "vox-build") return;
       if (e.data.type === "select") onSelect(e.data.selection);
       else if (e.data.type === "scroll") scrollY.current = e.data.y;
     };

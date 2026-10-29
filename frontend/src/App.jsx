@@ -159,7 +159,7 @@ export default function App() {
   if (projectError) {
     return (
       <div className="fatal">
-        <p><strong>Can't reach the VoiceSite server.</strong></p>
+        <p><strong>Can't reach the Vox Build server.</strong></p>
         <p>{projectError}. Check that the backend is running, then reload the page.</p>
       </div>
     );
@@ -174,7 +174,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <Logo />
-          <span className="brand-name">VoiceSite</span>
+          <span className="brand-name">Vox Build</span>
           <span className="brand-sep" aria-hidden="true">/</span>
           <span className="project-name" title={meta.brief?.business || "Untitled site"}>{meta.brief?.business || "Untitled site"}</span>
         </div>

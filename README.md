@@ -1,4 +1,4 @@
-# VoiceSite
+# Vox Build
 
 **Build and edit a website by talking to it.**
 

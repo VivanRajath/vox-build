@@ -1,4 +1,4 @@
-"""Creates (or updates) the Bolna voice agent that drives VoiceSite.
+"""Creates (or updates) the Bolna voice agent that drives Vox Build.
 
   python scripts/create_agent.py            create a new agent, prints its id
   python scripts/create_agent.py --update   update the agent in BOLNA_AGENT_ID
@@ -100,7 +100,7 @@ def agent_body() -> dict:
     prompt = (ROOT / "bolna" / "agent_prompt.md").read_text(encoding="utf-8")
     return {
         "agent_config": {
-            "agent_name": "VoiceSite - Vox",
+            "agent_name": "Vox Build - Vox",
             "agent_welcome_message": "Hi, I'm Vox! Tell me what website you'd like to build, or what to change.",
             "tasks": [{
                 "task_type": "conversation",

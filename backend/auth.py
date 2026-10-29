@@ -17,7 +17,7 @@ from fastapi.responses import RedirectResponse
 
 from . import config, users
 
-log = logging.getLogger("voicesite.auth")
+log = logging.getLogger("vox-build.auth")
 router = APIRouter()
 
 PROVIDERS = {

@@ -16,10 +16,10 @@ import httpx
 from .. import config, llm, store
 from . import prompts
 
-log = logging.getLogger("voicesite.research")
+log = logging.getLogger("vox-build.research")
 
 # Wikimedia requires an identifying User-Agent (https://w.wiki/4wJS).
-USER_AGENT = "VoiceSite/1.0 (https://github.com/VivanRajath/repo-sanbox-agent) python-httpx"
+USER_AGENT = "VoxBuild/1.0 (https://github.com/VivanRajath/vox-build) python-httpx"
 WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
 PEXELS_API = "https://api.pexels.com/v1/search"
 

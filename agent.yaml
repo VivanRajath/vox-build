@@ -1,5 +1,5 @@
 spec_version: "0.1.0"
-name: voicesite
+name: vox-build
 version: 2.0.0
 description: >
   Voice-driven website generator. A Bolna voice agent (Vox) turns speech

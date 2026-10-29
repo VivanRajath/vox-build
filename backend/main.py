@@ -1,4 +1,4 @@
-"""VoiceSite backend.
+"""Vox Build backend.
 
   /api/*      browser API (projects, typed commands, SSE, Bolna session mint,
               account + AI settings, zip download, GitHub push)
@@ -24,9 +24,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import auth, config, events, github, llm, store, users
 from .editor import engine
 
-log = logging.getLogger("voicesite")
-app = FastAPI(title="VoiceSite")
-app.add_middleware(SessionMiddleware, secret_key=config.SESSION_SECRET, session_cookie="voicesite", max_age=30 * 86400, same_site="lax")
+log = logging.getLogger("vox-build")
+app = FastAPI(title="Vox Build")
+app.add_middleware(SessionMiddleware, secret_key=config.SESSION_SECRET, session_cookie="vox-build", max_age=30 * 86400, same_site="lax")
 app.include_router(auth.router)
 
 INJECT_JS = Path(__file__).with_name("preview_inject.js")
@@ -205,16 +205,16 @@ async def push_to_github(project_id: str, request: Request):
     body = await request.json()
     files = store.export_files(project_id)
     business = (meta.get("brief") or {}).get("business") or "My website"
-    files.setdefault("README.md", f"# {business}\n\nBuilt by voice with VoiceSite. Open `index.html` in a browser to view it.\n".encode())
+    files.setdefault("README.md", f"# {business}\n\nBuilt by voice with Vox Build. Open `index.html` in a browser to view it.\n".encode())
     version = next((v for v in meta["versions"] if v["n"] == meta["current"]), {})
     try:
         result = await github.push(
             token,
             str(body.get("repo", "")),
             files,
-            message=f"VoiceSite v{meta['current']}: {version.get('summary') or 'Update site'}",
+            message=f"Vox Build v{meta['current']}: {version.get('summary') or 'Update site'}",
             private=bool(body.get("private", False)),
-            description=f"{business} website, built with VoiceSite",
+            description=f"{business} website, built with Vox Build",
         )
     except github.GitHubError as e:
         raise HTTPException(400, str(e))

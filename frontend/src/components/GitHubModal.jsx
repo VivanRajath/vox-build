@@ -9,7 +9,7 @@ function suggestName(meta) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  return slug ? `${slug}-website` : `voicesite-${meta.id}`;
+  return slug ? `${slug}-website` : `vox-build-${meta.id}`;
 }
 
 export default function GitHubModal({ projectId, meta, user, auth, onClose, onPushed }) {
@@ -45,7 +45,7 @@ export default function GitHubModal({ projectId, meta, user, auth, onClose, onPu
   } else if (!user.github) {
     body = (
       <>
-        <p className="modal-sub">Connect your GitHub account so VoiceSite can create a repository and push your site to it.</p>
+        <p className="modal-sub">Connect your GitHub account so Vox Build can create a repository and push your site to it.</p>
         {auth?.github ? (
           <a className="btn primary" href={api.loginUrl("github")}>Connect GitHub</a>
         ) : (

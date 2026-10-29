@@ -51,7 +51,7 @@ export const SettingsIcon = () => (
   <svg {...base}><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>
 );
 
-// The VoiceSite mark: three bars of a voice level meter.
+// The Vox Build mark: three bars of a voice level meter.
 export const Logo = () => (
   <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
     <rect width="22" height="22" rx="5" fill="currentColor" />

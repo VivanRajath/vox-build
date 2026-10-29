@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-VoiceSite turns speech into website versions. Three systems cooperate:
+Vox Build turns speech into website versions. Three systems cooperate:
 
 | Component | Responsibility |
 |---|---|
