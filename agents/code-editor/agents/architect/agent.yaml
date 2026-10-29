@@ -7,9 +7,9 @@ description: >
   exploration. Has shell access for full filesystem traversal.
 
 model:
-  preferred: "anthropic:claude-sonnet-4-5-20250514"
-  fallback: ["openai:gpt-4o"]
+  preferred: "anthropic:claude-opus-5-5"
+  fallback: ["openai:gpt-4.1", "google:gemini-2.5-pro"]
 
-tools: [file-read, file-write, shell-exec]
+tools: [file-read, file-write]
 
 skills: [apply-edit]

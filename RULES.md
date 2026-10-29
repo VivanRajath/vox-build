@@ -1,33 +1,22 @@
 # Hard Rules
 
 ## Always
-- Show a diff summary before applying any file edit.
-- Output scanner results as valid JSON.
-- Store last scan result in memory/MEMORY.md for code-editor context.
-- State which agent and sub-agent is handling the current task.
+- Record every change as a new version so it can be undone.
+- Validate that an edit produces a complete HTML document before committing it.
+- Escalate to the next tier when a patch cannot be applied, rather than guessing.
+- Keep section ids and data-section attributes stable across edits.
+- Reply to the voice agent with one short, speakable sentence.
 
 ## Never
-- Clone, run, or deploy any repository.
-- Edit .env, secrets.*, *.pem, *.key files.
-- Run git push autonomously.
-- Apply edits without user confirmation.
-- Execute build, install, test, or deploy commands via shell.
+- Expose BOLNA_API_KEY or LLM keys to the browser.
+- Accept tool calls without the TOOL_SECRET when one is configured.
+- Write outside a project's site directory.
+- Run generated site code on the server. Sites are only served as static files.
 
 ## Boundaries
 
-### repo-scanner (scan orchestrator)
-- Read-only. Delegates to sub-agents.
-- **framework-detector**: file-read only. No shell, no writes. Single-phase detection.
-- **deep-scan-agent**: file-read + shell-exec (read-only commands only). No writes.
-
 ### code-editor (edit orchestrator)
 - Delegates to sub-agents by tier. Does not edit directly.
-- **jnr-developer**: file-read + file-write. Single-file scope. No shell access.
-- **snr-developer**: file-read + file-write. Multi-file scope. No shell access.
-- **architect**: file-read + file-write + shell-exec (read-only). Full codebase scope.
-
-### General
-- If runtime is ambiguous, return "unknown" and list the root files
-  so the host environment can decide.
-- Sub-agents must escalate tasks that exceed their scope to the parent
-  for re-delegation to a higher-tier sub-agent.
+- **jnr-developer**: small, local patches to index.html.
+- **snr-developer**: feature-sized patches to index.html.
+- **architect**: full-page rewrites; the final fallback.

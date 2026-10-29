@@ -7,8 +7,8 @@ description: >
   Optimized for low LLM cost using small/flash models.
 
 model:
-  preferred: "google:gemini-2.0-flash"
-  fallback: ["openai:gpt-4o-mini"]
+  preferred: "anthropic:claude-haiku-5-5"
+  fallback: ["openai:gpt-4.1-mini", "google:gemini-2.5-flash"]
 
 tools: [file-read, file-write]
 

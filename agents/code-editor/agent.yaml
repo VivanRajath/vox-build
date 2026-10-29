@@ -7,8 +7,8 @@ description: >
   or architect) based on the intent-router's complexity assessment.
 
 model:
-  preferred: "anthropic:claude-sonnet-4-5-20250514"
-  fallback: ["openai:gpt-4o"]
+  preferred: "anthropic:claude-sonnet-5-5"
+  fallback: ["openai:gpt-4.1"]
 
 tools: [file-read, file-write]
 

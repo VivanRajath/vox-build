@@ -1,29 +1,27 @@
 spec_version: "0.1.0"
-name: repo-sandbox-agent
-version: 1.0.0
+name: voicesite
+version: 2.0.0
 description: >
-  Multi-agent system that scans any Git repository to detect its
-  runtime and run instructions, then assigns natural language code
-  edits to tiered autonomous sub-agents (jnr-developer, snr-developer,
-  architect) to manage LLM costs. Follows the GitAgent standard with
-  recursive agent composition.
+  Voice-driven website generator. A Bolna voice agent (Vox) turns speech
+  into custom-function calls; the backend routes each edit to a tiered
+  sub-agent (jnr-developer, snr-developer, architect) to balance latency
+  and LLM cost, and streams every new version to a live preview.
 
 model:
-  preferred: "anthropic:claude-sonnet-4-5-20250514"
-  fallback: ["openai:gpt-4o", "google:gemini-2.0-flash"]
+  preferred: "anthropic:claude-sonnet-5-5"
+  fallback: ["openai:gpt-4.1", "google:gemini-2.5-pro"]
 
-tools: [file-read, file-write, shell-exec]
+tools: [file-read, file-write]
 
-skills: [detect-runtime, route-intent, apply-edit]
+skills: [route-intent, apply-edit]
+
+voice:
+  platform: bolna
+  prompt: bolna/agent_prompt.md
+  setup: scripts/create_agent.py
+  functions: [generate_site, edit_site, undo_change, describe_site]
 
 sub_agents:
-  - name: repo-scanner
-    path: agents/repo-scanner
-    description: >
-      Scan orchestrator. Delegates to framework-detector and
-      deep-scan-agent to produce structured JSON.
-    sub_agents: [framework-detector, deep-scan-agent]
-
   - name: code-editor
     path: agents/code-editor
     description: >

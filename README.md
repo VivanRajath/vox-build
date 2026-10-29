@@ -1,355 +1,164 @@
-# repo-sandbox-agent
+# VoiceSite
 
-A multi-agent system built on the open GitAgent Standard and powered by the Lyzr ADK. It scans Git repositories to detect runtime environments, classifies the complexity of natural language code edit requests, and delegates those edits to tiered autonomous sub-agents. Simple tasks go to fast, cheap models. Complex tasks go to capable, expensive models. This cost-aware routing is the core design decision behind the architecture.
+**Build and edit a website by talking to it.**
 
-Developed for the Lyzr GitAgent Challenge.
+Describe a website out loud and it appears. Then keep talking: *"make the header dark green"*, *"add a testimonials section"*, *"undo that"*. Click any element and say *"make **this** bigger"*. Every change lands in the live preview within seconds while the voice agent, Vox, talks back.
 
-## Table of Contents
+Built for the [Bolna Buildathon](https://www.bolna.ai/symphony/buildathon) on [Bolna](https://www.bolna.ai) voice AI.
 
-- [Architecture](#architecture)
-- [Agent Hierarchy](#agent-hierarchy)
-- [Capabilities](#capabilities)
-- [GitAgent Standard Compliance](#gitagent-standard-compliance)
-- [Repository Structure](#repository-structure)
-- [Setup](#setup)
-- [Usage](#usage)
-- [Tool Reference](#tool-reference)
-- [Model Assignment](#model-assignment)
-- [Security](#security)
-- [Extensibility](#extensibility)
-
-## Architecture
-
-For the full technical architecture document, see [ARCHITECTURE.md](ARCHITECTURE.md).
-
-The system uses a three-level agent hierarchy where parent agents act as orchestrators and leaf agents perform the actual work. All agents follow the recursive GitAgent Standard structure with `agent.yaml`, `SOUL.md`, `SKILL.md`, and `DUTIES.md`.
+## How it works
 
 ```
-repo-sandbox-agent (Orchestrator)
-|
-|-- repo-scanner                   Scan Orchestrator
-|   |-- framework-detector         Manifest reading, runtime detection
-|   +-- deep-scan-agent            Deep traversal, architecture summary
-|
-|-- intent-router                  Complexity classifier
-|
-+-- code-editor                    Edit Orchestrator
-    |-- jnr-developer              Single-file edits (low cost)
-    |-- snr-developer              Multi-file features (standard cost)
-    +-- architect                  System-level changes (high cost)
+Browser (React)                          FastAPI backend                       Bolna
+──────────────────                       ──────────────────────                ─────────────────────
+Mic button ── @bolna/web-call ─────────────────────────────────────────────▶  Vox voice agent
+   │   session from /api/bolna-session ─▶ mints single-use session            Deepgram STT → LLM
+   │   (user_data: { project_id })        (API key stays server-side)         → Cartesia TTS
+   │                                                                              │
+   │                                      /tools/edit_site  ◀── custom function ──┘
+   │                                         │                  (POST, mid-conversation)
+   │                                         ▼
+   │                                      intent-router → jnr / snr / architect
+   │                                         │   (cheap model → strong model)
+   │                                         ▼
+   │                                      new version of index.html
+   ▼                                         │
+Live preview iframe ◀── SSE "job_done" ──────┘
 ```
 
-## Agent Hierarchy
+1. The browser starts a **Bolna Web Call** and passes the current `project_id` as `user_data`. Bolna substitutes it into the agent prompt.
+2. When you ask for a change, the Bolna agent calls a **custom function** (`generate_site`, `edit_site`, `undo_change`, `describe_site`) on this backend.
+3. For a new site, the **researcher** first writes a design brief (audience, tone, palette, Google Fonts, sections and their elements) and downloads real photos for each image slot into the site. Edits that mention photos trigger a fresh image search.
+4. The **intent-router** picks a tier. Small tweaks go to a fast model that returns tiny SEARCH/REPLACE patches. Feature additions go to a standard model. Redesigns go to the top model, which rewrites the whole page. A patch that fails to apply escalates to the next tier automatically.
+5. The new version is saved (with undo history) and pushed to the browser over **Server-Sent Events**. The preview reloads and keeps your scroll position.
+6. Quick edits come back within `TOOL_SYNC_WAIT` seconds, so Vox can confirm the exact change. Slower ones return "working on it" right away and land on screen when they're done, so the call never goes silent.
 
-### Orchestrator
+### Features
 
-The root agent. Receives user messages and routes them to either the repo-scanner (for scan requests) or the intent-router followed by the code-editor (for edit requests). It never reads, writes, or executes anything directly.
+- Voice-first site generation and editing (Bolna Web Call SDK + custom functions)
+- **Researcher agent**: plans each site (audience, palette, fonts, sections) and finds real, relevant photos
+- **Point and speak**: click an element in the preview, then say "make this rounder"
+- Undo by voice, plus a clickable version timeline
+- Cost- and latency-aware model tiers with automatic escalation
+- Desktop / tablet / mobile preview sizes
+- Typed fallback for every voice action
+- Multilingual speech: Vox replies in your language and writes edit instructions in English
+- **Accounts**: sign in with Google or GitHub
+- **Bring your own model**: each user adds their own API key (Anthropic, OpenAI, Gemini, Groq or any OpenAI-compatible endpoint) and picks a model per tier, with a "Test & load models" check
+- **Ship it**: download the site as a ZIP, or push it to a new or existing GitHub repo in one commit
 
-### repo-scanner
+## Quick start
 
-Coordinates a two-phase scan:
-
-1. **framework-detector** reads manifest files (package.json, requirements.txt, go.mod, Cargo.toml, Gemfile, pom.xml, Dockerfile) and returns runtime, framework, version, entry point, install command, run command, and port.
-
-2. **deep-scan-agent** uses shell commands to traverse the full directory tree, discover environment variable usage (os.environ, process.env, env.Get), and produce a structural summary of the codebase.
-
-The parent scanner merges both outputs into a single JSON object and stores it in `memory/MEMORY.md` for use by the code-editor sub-agents.
-
-### intent-router
-
-A classification skill that evaluates user instructions against the scanned codebase structure. It assigns one of three complexity tiers:
-
-| Severity | Tier | Sub-Agent | Example |
-|---|---|---|---|
-| Low | jnr | jnr-developer | "change the background color to red" |
-| Medium | snr | snr-developer | "add a /health endpoint router and module" |
-| High | architect | architect | "refactor the database layer to use connection pooling" |
-
-### code-editor
-
-An edit orchestrator that receives the tier from the intent-router and delegates to the matching sub-agent:
-
-- **jnr-developer**: Handles single-file edits. Uses fast, cheap models (gemini-2.0-flash). Has file-read and file-write access only. Cannot use shell commands or make architecture decisions.
-
-- **snr-developer**: Handles multi-file features and refactors. Uses standard models (claude-sonnet). Has file-read and file-write access. Works within the scanner's depth-3 file structure map.
-
-- **architect**: Handles system-level architecture changes and complex debugging. Uses top-tier models (claude-sonnet with gpt-4o fallback). Has full tool access including shell-exec for deep filesystem exploration beyond the scanner's depth-3 limit.
-
-## Capabilities
-
-### Repository Scanning
-
-- Automatic runtime detection across Python, Node.js, Go, Rust, Ruby, Java, and Docker
-- Framework identification (Flask, FastAPI, Django, Express, Next.js, Vite, Gin, Actix, Rails, etc.)
-- Deep file structure analysis with full directory tree traversal
-- Environment variable discovery from source code and .env.example files
-- Architecture summarization for downstream code editing context
-- Persistent memory: scan results are appended to `memory/MEMORY.md` and live session state is tracked in `memory/runtime/context.md`
-
-### Tiered Code Editing
-
-- Three-tier sub-agent system balancing quality against API cost
-- Keyword-based complexity classification for automatic tier routing
-- Minimal diff generation: agents change only what was asked
-- Confirmation workflow: all agents show diffs before writing
-- Escalation policy: lower-tier agents report back if a task exceeds their scope
-
-### Native System Operations
-
-- Direct file read/write to the local filesystem
-- Shell command execution with safety blocklist
-- Git lifecycle automation (stage, commit, push) using PAT authentication
-- Secret management with environment variable isolation
-
-## GitAgent Standard Compliance
-
-Every agent in the hierarchy follows the GitAgent Standard directory conventions:
-
-| File | Purpose |
-|---|---|
-| agent.yaml | Manifest defining name, version, model preferences, tools, skills, and sub-agents |
-| SOUL.md | Agent identity, personality, communication style, and workflow |
-| SKILL.md | Capability definition with steps, scope, patterns, and guardrails |
-| DUTIES.md | Segregation of duties, permissions, boundaries, and escalation policy |
-
-Root-level standard files provide system-wide governance:
-
-| File | Purpose |
-|---|---|
-| RULES.md | Hard constraints (must-always, must-never rules, safety boundaries) |
-| AGENTS.md | Full agent tree documentation with I/O specifications and delegation flows |
-| DUTIES.md | Orchestrator-level segregation of duties with permission matrix |
-
-Additional standard directories:
-
-| Directory | Purpose |
-|---|---|
-| skills/ | Reusable capability modules with SKILL.md definitions and helper scripts |
-| tools/ | MCP-compatible tool schemas in YAML format |
-| workflows/ | Declarative multi-step procedure definitions |
-| knowledge/ | Reference documents available to all agents |
-| memory/ | Persistent cross-session state and live runtime context |
-| hooks/ | Lifecycle event handlers (bootstrap sequence) |
-| examples/ | Few-shot calibration interactions for agent behavior |
-| .gitagent/ | Ephemeral runtime state (gitignored) |
-
-## Repository Structure
-
-```
-repo-sandbox-agent/
-|-- agent.yaml                  Root manifest
-|-- SOUL.md                     Orchestrator identity
-|-- RULES.md                    Hard constraints
-|-- DUTIES.md                   Segregation of duties
-|-- AGENTS.md                   Full agent documentation
-|-- ARCHITECTURE.md             Technical architecture document
-|-- README.md                   This file
-|
-|-- agents/
-|   |-- code-editor/
-|   |   |-- agent.yaml, SOUL.md, SKILL.md, DUTIES.md
-|   |   +-- agents/
-|   |       |-- jnr-developer/
-|   |       |   +-- agent.yaml, SOUL.md, SKILL.md, DUTIES.md
-|   |       |-- snr-developer/
-|   |       |   +-- agent.yaml, SOUL.md, SKILL.md, DUTIES.md
-|   |       +-- architect/
-|   |           +-- agent.yaml, SOUL.md, SKILL.md, DUTIES.md
-|   +-- repo-scanner/
-|       |-- agent.yaml, SOUL.md, SKILL.md, DUTIES.md
-|       +-- agents/
-|           |-- framework-detector/
-|           |   +-- agent.yaml, SOUL.md, SKILL.md, DUTIES.md
-|           +-- deep-scan-agent/
-|               +-- agent.yaml, SOUL.md, SKILL.md, DUTIES.md
-|
-|-- skills/
-|   |-- apply-edit/             Code editing skill with patch script
-|   |-- detect-runtime/         Runtime detection skill with shell script
-|   +-- route-intent/           Complexity classification skill
-|
-|-- tools/                      MCP-compatible tool schemas
-|-- workflows/                  Declarative multi-step procedures
-|-- knowledge/                  Reference documents
-|-- memory/                     Persistent state and runtime context
-|-- hooks/                      Lifecycle handlers
-|-- examples/                   Few-shot calibration
-|-- .gitagent/                  Runtime state (gitignored)
-|
-|-- lyzr_runner.py              Lyzr ADK runner (main entry point)
-|-- requirements.txt            Python dependencies
-+-- .gitignore
-```
-
-## Setup
-
-### Prerequisites
-
-- Python 3.8 or higher
-- A Lyzr API key or OpenAI API key
-- A GitHub Personal Access Token (for git push functionality)
-
-### Install Dependencies
+Requirements: Python 3.11+, Node 18+, a Bolna account, and one LLM key (Anthropic, OpenAI, Gemini or Groq).
 
 ```bash
+# 1. Backend
+python -m venv .venv
+.venv/Scripts/activate            # Windows  (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
+cp .env.example .env              # fill in your keys
+
+# 2. Frontend
+cd frontend && npm install && npm run build && cd ..
+
+# 3. Run (serves the built frontend too)
+uvicorn backend.main:app --port 8000
 ```
 
-### Configure Environment
+Open http://localhost:8000. Typed commands work as soon as an LLM key is set.
 
-Create a `.env` file in the repository root:
+### Turning on voice (deploy)
 
-```env
-LYZR_API_KEY=your_lyzr_or_openai_api_key
-GITHUB_PAT=your_github_personal_access_token
-```
+During a call, Bolna's cloud calls the backend's `/tools/*` endpoints, so voice needs the backend deployed at a public HTTPS URL. The repo ships a `Dockerfile` (frontend and backend in one container) and a Render blueprint:
 
-### Run the Agent
+1. Push the repo to GitHub.
+2. In [Render](https://render.com): **New + → Blueprint**, then pick the repo. It reads `render.yaml`.
+3. Fill in `BOLNA_API_KEY` and one LLM key when prompted. `TOOL_SECRET` is generated for you.
+4. Once it's live, copy the service URL (e.g. `https://voicesite.onrender.com`) and `TOOL_SECRET` from Render into your local `.env` as `PUBLIC_BASE_URL` and `TOOL_SECRET`, then create the agent:
 
 ```bash
-python lyzr_runner.py
+python scripts/create_agent.py            # prints BOLNA_AGENT_ID
+python scripts/create_agent.py --update   # push prompt/function changes later
+python scripts/create_agent.py --dump     # function JSON to paste in the dashboard instead
 ```
 
-On startup, the runner will:
-1. Load the root `agent.yaml` and `SOUL.md`
-2. Recursively discover all sub-agents in the `agents/` tree
-3. Print the full agent hierarchy with model assignments
-4. Register all tools with the Lyzr ADK
-5. Enter the interactive prompt
+5. Add `BOLNA_AGENT_ID` to the Render environment. The service redeploys and the mic button goes live.
 
-Example startup output:
+The same image runs on Railway, Fly.io or any Docker host: set the env vars from `.env.example` and point `PUBLIC_BASE_URL` at it. Render's free plan sleeps when idle and has no persistent disk, so open the app once before a demo, and expect projects to reset on redeploy.
 
-```
-============================================================
-  repo-sandbox-agent  |  GitAgent Standard Runner
-============================================================
+If the mic errors with "Web calls aren't enabled", ask Bolna to enable web calls on your account.
 
-Agent : repo-sandbox-agent v1.0.0
-Model : anthropic:claude-sonnet-4-5-20250514
+### Development mode
 
-Agent Hierarchy (8 agents discovered):
-  Orchestrator: repo-sandbox-agent
-    architect                 [anthropic:claude-sonnet-4-5-20250514]
-    code-editor               [anthropic:claude-sonnet-4-5-20250514]
-    deep-scan-agent           [anthropic:claude-sonnet-4-5-20250514]
-    framework-detector        [google:gemini-2.0-flash]
-    jnr-developer             [google:gemini-2.0-flash]
-    repo-scanner              [anthropic:claude-sonnet-4-5-20250514]
-    snr-developer             [anthropic:claude-sonnet-4-5-20250514]
-
---- GitAgent Initialized ---
-Tools : scan_repo, route_intent, write_file, read_file, shell_exec, get_env_var, git_push
-Type 'exit' to quit.
+```bash
+uvicorn backend.main:app --port 8000 --reload
+cd frontend && npm run dev        # http://localhost:5173, proxies to :8000
 ```
 
-## Usage
+## Configuration
 
-Interact with the agent using natural language prompts in the terminal.
-
-### Scanning a Repository
-
-```
-User >> Scan /path/to/my-project and tell me the runtime
-```
-
-The orchestrator will delegate to repo-scanner, which runs framework-detector then deep-scan-agent, and returns the assembled JSON.
-
-### Code Editing (Automatic Tier Routing)
-
-```
-User >> Change the background color in style.css to dark blue
-```
-
-The intent-router classifies this as LOW complexity and routes to jnr-developer, which reads the file, generates a diff, and writes on confirmation.
-
-```
-User >> Add a /health endpoint with a JSON response
-```
-
-Classified as MEDIUM complexity, routed to snr-developer.
-
-```
-User >> Refactor the database layer to use connection pooling and fix the memory leak
-```
-
-Classified as HIGH complexity, routed to architect.
-
-### Combined Scan and Edit
-
-```
-User >> Scan https://github.com/user/repo, then add a login page
-```
-
-The orchestrator runs the scan first, stores context, then routes the edit through intent-router to the appropriate sub-agent.
-
-### Git Operations
-
-```
-User >> Push the changes in my-project to GitHub with commit message "Fixed routing bug"
-```
-
-The orchestrator uses the git_push tool with PAT authentication from the environment.
-
-## Tool Reference
-
-| Tool | Description | Available To |
-|---|---|---|
-| scan_repo | Two-phase repo scanning (framework-detector then deep-scan-agent) | Orchestrator |
-| route_intent | Keyword-based complexity classification returning jnr/snr/architect | Orchestrator |
-| read_file | Read file contents at a given path | All agents |
-| write_file | Write content to a file (blocks .env, .pem, .key) | code-editor sub-agents |
-| shell_exec | Execute read-only shell commands (blocks destructive operations) | architect, deep-scan-agent |
-| get_env_var | Read environment variables securely | Orchestrator |
-| git_push | Stage, commit, push using PAT authentication | Orchestrator |
-
-## Model Assignment
-
-Models are assigned per agent based on the cost-complexity tradeoff:
-
-| Agent | Preferred Model | Fallback | Rationale |
-|---|---|---|---|
-| Orchestrator | claude-sonnet-4-5 | gpt-4o, gemini-2.0-flash | Routing requires reasoning |
-| framework-detector | gemini-2.0-flash | gpt-4o-mini | Simple pattern matching |
-| deep-scan-agent | claude-sonnet-4-5 | gpt-4o | Architecture summarization needs reasoning |
-| jnr-developer | gemini-2.0-flash | gpt-4o-mini | Simple edits, optimize for cost |
-| snr-developer | claude-sonnet-4-5 | gpt-4o | Multi-file edits need reasoning |
-| architect | claude-sonnet-4-5 | gpt-4o | Complex system-level reasoning |
-
-## Security
-
-| Control | Implementation |
+| Variable | Purpose |
 |---|---|
-| Sensitive file protection | write_file blocks .env, .env.local, .pem, .key at runtime |
-| Shell command restrictions | shell_exec blocklist prevents rm, del, format, install, build, deploy, docker, git push, git commit |
-| Scope boundaries | Each sub-agent's DUTIES.md defines permitted tools, file scope, and escalation policy |
-| Secret management | PATs and API keys read from environment variables, never passed to model output |
-| Diff-before-write | All agents must show unified diffs and receive confirmation before writing files |
-| Git push safety | Requires explicit user instruction; PAT is injected into URL at runtime and never logged |
-| Command timeout | Shell commands are limited to 30 seconds to prevent hung processes |
+| `BOLNA_API_KEY` | Bolna API key. Used server-side only, to mint web-call sessions and create the agent |
+| `BOLNA_AGENT_ID` | The Vox agent created by `scripts/create_agent.py` |
+| `PUBLIC_BASE_URL` | Public https URL of this backend, used in the custom-function URLs |
+| `TOOL_SECRET` | Shared secret Bolna sends as `Authorization: Bearer …` on tool calls |
+| `TOOL_SYNC_WAIT` | Seconds a tool call waits before answering "working on it" (default 8) |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` | LLM that writes the site. The first one set wins, or force one with `LLM_PROVIDER` |
+| `PEXELS_API_KEY` | Optional. Better stock photos for the researcher; without it photos come from Wikimedia Commons |
+| `MODEL_JNR` / `MODEL_SNR` / `MODEL_ARCHITECT` / `MODEL_RESEARCH` | Optional per-tier model overrides (research defaults to the jnr model) |
+| `SESSION_SECRET` | Signs the login cookie and encrypts stored GitHub tokens and user API keys. Auto-generated into `data/.session_secret` if unset; set it explicitly in production |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional. Google sign-in. Redirect URI: `<site>/auth/google/callback` |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | Optional. GitHub sign-in and push (scope `repo`). Callback URL: `<site>/auth/github/callback` |
+| `BOLNA_LLM_PROVIDER`, `BOLNA_LLM_MODEL`, `BOLNA_VOICE`, `BOLNA_VOICE_ID`, `BOLNA_STT_LANGUAGE` | Optional overrides for the voice agent created by the script |
 
-## Extensibility
+Default tier models:
 
-To add a new sub-agent at any level:
+| Tier | Anthropic | OpenAI | Gemini | Groq |
+|---|---|---|---|---|
+| jnr (small tweaks) | `claude-haiku-5-5` | `gpt-4.1-mini` | `gemini-2.5-flash` | `openai/gpt-oss-20b` |
+| snr (features) | `claude-sonnet-5-5` | `gpt-4.1` | `gemini-2.5-pro` | `openai/gpt-oss-120b` |
+| architect (redesigns) | `claude-opus-5-5` | `gpt-4.1` | `gemini-2.5-pro` | `openai/gpt-oss-120b` |
 
-1. Create a directory under the parent's `agents/` folder:
-   ```
-   agents/code-editor/agents/my-new-agent/
-   ```
+### Accounts, your own API key, GitHub
 
-2. Add the four standard files:
-   ```
-   agent.yaml    - Manifest (name, model, tools, skills)
-   SOUL.md       - Identity and workflow
-   SKILL.md      - Capability definition and guardrails
-   DUTIES.md     - Permissions and escalation policy
-   ```
+1. **Google**: Google Cloud Console > APIs & Services > Credentials > Create OAuth client ID (Web application). Add `http://localhost:8000/auth/google/callback` (and/or `http://localhost:5173/...` for Vite dev, and your deployed URL) as an authorized redirect URI.
+2. **GitHub**: github.com/settings/developers > New OAuth App. Callback URL `http://localhost:8000/auth/github/callback` (a GitHub OAuth App takes one callback URL, so create one app per environment).
+3. Put the four values in `.env` and restart.
 
-3. Update the parent's `agent.yaml` to include the new agent in `sub_agents`.
+A project is owned by whoever first works on it while signed in. Its edits (typed or by voice) use the owner's AI settings and fall back to the server's `.env` keys. Pushing replaces the repo's default branch contents with the current version as one new commit (earlier history is kept).
 
-4. Update the parent's `SOUL.md` to document when the new agent is delegated to.
+## Repository layout
 
-The `discover_sub_agents()` function in `lyzr_runner.py` recursively walks the entire `agents/` tree at startup, so newly added agents are automatically discovered without modifying the runner code.
+```
+backend/
+  main.py            FastAPI app: browser API, Bolna session mint, /tools/*, preview, zip, push
+  auth.py            Google / GitHub OAuth sign-in
+  users.py           accounts, encrypted GitHub tokens and per-user AI settings
+  github.py          push a site to a repo as one commit (Git Data API)
+  editor/research.py researcher: design brief + photo search (Pexels / Wikimedia)
+  editor/router.py   intent-router: instruction → tier
+  editor/engine.py   code-editor: generate, patch, escalate, undo, describe
+  editor/prompts.py  system prompts (tier personas load from agents/*/SOUL.md)
+  llm.py             Anthropic / OpenAI / Gemini / Groq completion, per-user keys
+  store.py           projects on disk with version history
+  events.py          SSE fan-out
+  preview_inject.js  element picker + scroll keeper injected into previews
+bolna/agent_prompt.md   Vox's system prompt
+scripts/create_agent.py Creates/updates the Bolna agent and its custom functions
+frontend/               Vite + React app (preview, voice panel, activity, versions)
+agents/                 GitAgent specs. code-editor tier SOUL.md files are live prompts
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the design details and [AGENTS.md](AGENTS.md) for the agent hierarchy.
+
+## Security notes
+
+- The Bolna API key never reaches the browser. The SDK only receives short-lived, single-use sessions.
+- `/tools/*` requires `TOOL_SECRET` when it is set. Always set it on a public deployment.
+- Generated sites are served from `/preview/<id>/` with path-traversal checks and a `Content-Security-Policy: sandbox` header (no `allow-same-origin`). Anyone with a project link can edit a page, so its scripts run in an opaque origin and can't use the viewer's login to call the API.
+- User API keys and GitHub tokens are encrypted at rest and never sent back to the browser. Custom model base URLs must be public `https://` addresses.
 
 ---
 
-Built by Vivan Rajath for the Lyzr GitAgent Challenge.
+Built by Vivan Rajath for the Bolna Buildathon.

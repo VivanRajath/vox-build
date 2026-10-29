@@ -1,0 +1,15 @@
+spec_version: "0.1.0"
+name: researcher
+version: 1.0.0
+description: >
+  Researcher sub-agent. Runs before the developers: produces a design brief
+  (audience, tone, palette, fonts, sections and their elements) and finds
+  real, relevant photos for each image slot, saved into the site.
+
+model:
+  preferred: "anthropic:claude-haiku-5-5"
+  fallback: ["groq:qwen/qwen3.8-27b", "openai:gpt-4.1-mini"]
+
+tools: [image-search, file-write]
+
+skills: [research-design]

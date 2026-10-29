@@ -7,8 +7,8 @@ description: >
   Uses standard-tier models for balanced cost and capability.
 
 model:
-  preferred: "anthropic:claude-sonnet-4-5-20250514"
-  fallback: ["openai:gpt-4o"]
+  preferred: "anthropic:claude-sonnet-5-5"
+  fallback: ["openai:gpt-4.1", "google:gemini-2.5-pro"]
 
 tools: [file-read, file-write]
 

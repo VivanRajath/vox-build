@@ -1,0 +1,37 @@
+# Render blueprint: New + > Blueprint > pick this repo.
+# Secrets marked sync: false are asked for once in the Render dashboard.
+services:
+  - type: web
+    name: voicesite
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/config
+    envVars:
+      - key: BOLNA_API_KEY
+        sync: false
+      - key: BOLNA_AGENT_ID
+        sync: false
+      - key: TOOL_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: TOOL_SYNC_WAIT
+        value: "8"

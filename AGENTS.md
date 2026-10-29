@@ -1,145 +1,91 @@
-# repo-sandbox-agent
+# VoiceSite agents
 
 ## Agent Hierarchy
 
 ```
-repo-sandbox-agent (Orchestrator)
+Vox (Bolna voice agent)  ── bolna/agent_prompt.md, scripts/create_agent.py
+│   Talks to the user, calls custom functions:
+│   generate_site · edit_site · undo_change · describe_site
 │
-├── repo-scanner ─────────────── Scan orchestrator
-│   ├── framework-detector ───── Phase 1: manifest reading, runtime detection
-│   └── deep-scan-agent ──────── Phase 2: deep traversal, architecture summary
-│
-├── intent-router ────────────── Classifies edit complexity → assigns tier
-│
-└── code-editor ──────────────── Edit orchestrator
-    ├── jnr-developer ────────── Tier jnr: single-file edits (flash models)
-    ├── snr-developer ────────── Tier snr: multi-file features (sonnet models)
-    └── architect ────────────── Tier architect: system changes (top-tier models)
+└── voicesite backend (orchestrator)  ── backend/main.py
+    │
+    ├── researcher ────────────────── backend/editor/research.py
+    │     Design brief + real photos before building
+    │
+    ├── intent-router ────────────── backend/editor/router.py
+    │     Classifies a spoken edit → tier
+    │
+    └── code-editor ──────────────── backend/editor/engine.py
+        ├── jnr-developer ────────── Tier jnr: small visual tweaks (fast model, patches)
+        ├── snr-developer ────────── Tier snr: sections & features (standard model, patches)
+        └── architect ────────────── Tier architect: redesigns & fallback (top model, full rewrite)
 ```
 
----
-
-## Agent 1: repo-scanner
-
-**Role:** Scan orchestrator
-**Input:** repo path (local)
-**Output:** structured JSON
-
-Delegates scanning to two sub-agents in sequence:
-
-### Sub-Agent: framework-detector (Phase 1)
-
-**Input:** repo root path
-**Output:** partial JSON (runtime, version_hint, entry, install_cmd, run_cmd, port, framework)
-
-Reads manifest files (package.json, requirements.txt, go.mod, Cargo.toml,
-Gemfile, pom.xml, Dockerfile) and pattern-matches to detect runtime and framework.
-Uses cheap flash models. Read-only, no shell access.
-
-### Sub-Agent: deep-scan-agent (Phase 2)
-
-**Input:** repo root path
-**Output:** partial JSON (file_structure, context_summary, env_vars_needed)
-
-Traverses the full directory tree via shell commands (tree, find, grep).
-Discovers env var usage patterns, maps dependencies, and summarizes the
-architecture. Uses standard models with shell-exec access.
-
-### Assembled Output
-```json
-{
-  "runtime": "python | node | go | rust | ruby | java | docker | unknown",
-  "version_hint": "3.11 | 18 | 1.21 | ...",
-  "entry": "app.py | index.js | main.go | ...",
-  "install_cmd": "pip install -r requirements.txt",
-  "run_cmd": "python app.py",
-  "port": 8000,
-  "framework": "flask | fastapi | express | nextjs | gin | unknown",
-  "env_vars_needed": ["DATABASE_URL", "SECRET_KEY"],
-  "file_structure": "Directory tree (full depth)",
-  "context_summary": "High-level summary of architecture and dependencies"
-}
-```
-
-The host environment consumes this JSON to:
-- Choose the correct sandbox runtime
-- Run install_cmd then run_cmd
-- Expose the correct port for preview
-- Feed file_structure and context_summary to code-editor sub-agents
+The tier personas in `agents/code-editor/agents/*/SOUL.md` are loaded as live
+system prompts, so editing them changes runtime behaviour.
 
 ---
 
-## Agent 2: intent-router
+## Vox (Bolna voice agent)
 
-**Input:** natural language instruction + repo-scanner JSON
-**Output:** assigned tier: `jnr`, `snr`, or `architect`
+**Prompt:** `bolna/agent_prompt.md` (`{project_id}` comes from web-call `user_data`)
+**Pipeline:** Deepgram nova-3 → Bolna-hosted LLM → Cartesia sonic-3.5
+**Functions:** POST `{PUBLIC_BASE_URL}/tools/<name>` with `Authorization: Bearer TOOL_SECRET`
 
-Evaluates the complexity of the user query against the codebase structure:
-- **Low** (single-file, typo, style) -> `jnr` -> jnr-developer
-- **Medium** (multi-file, features, refactors) -> `snr` -> snr-developer
-- **High** (architecture, complex debug, system redesign) -> `architect` -> architect
+| Function | Params | Returns |
+|---|---|---|
+| generate_site | project_id, description | `{status, message}` |
+| edit_site | project_id, instruction | `{status, message}` |
+| undo_change | project_id | `{status, message}` |
+| describe_site | project_id | `{status, message}` |
 
----
+`status` is `done`, `in_progress` (finishes in the background, preview updates via SSE) or `failed`.
 
-## Agent 3: code-editor
+## researcher
 
-**Role:** Edit orchestrator
-**Input:** natural language instruction + repo path + runtime context + tier
-**Output:** unified diff -> patched file on confirmation
+**Persona:** `agents/researcher/SOUL.md` · **Model:** the jnr model (own rate-limit quota on Groq)
+**Input:** spoken site description, or an edit that mentions photos
+**Output:** a design brief (stored in the project for later edits) plus photos saved to `site/images/`
 
-Delegates to exactly one sub-agent per task based on the intent-router's
-tier assignment:
+- Brief: business, industry, audience, tone, palette, Google Fonts, 5-8 sections with concrete elements, image slots with search queries
+- Photos: Pexels when `PEXELS_API_KEY` is set, otherwise Wikimedia Commons; a simpler fallback query is tried when the specific one finds nothing; credits go in the footer
+- Edits that mention photos get a fresh image search and start at the snr tier
 
-### Sub-Agent: jnr-developer (Tier: jnr)
+## intent-router
 
-**Model:** google:gemini-2.0-flash (low cost)
-**Tools:** file-read, file-write
-**Scope:** Single-file edits only
+**Input:** spoken instruction (English, written by Vox)
+**Output:** `jnr` | `snr` | `architect`
 
-Examples:
-- "change the background color to red"
-- "add a logo to the navbar"
-- "fix the typo in the footer text"
+- **Low** (colour, size, wording, one element) → `jnr`
+- **Medium** (add/remove/move sections, forms, galleries, interactions) → `snr`
+- **High** (redesign, theme change, start over) → `architect`
 
-### Sub-Agent: snr-developer (Tier: snr)
+## code-editor
 
-**Model:** anthropic:claude-sonnet-4-5-20250514 (standard cost)
-**Tools:** file-read, file-write
-**Scope:** Multi-file edits within scanner's depth-3 file structure
+**Input:** instruction + current index.html + optional selected element + tier
+**Output:** a new committed version with a one-sentence spoken summary
 
-Examples:
-- "add a /health endpoint router and module"
-- "create a user profile component with API integration"
-- "refactor the auth middleware to support JWT"
+| Sub-agent | Default model (Anthropic) | Output | On failure |
+|---|---|---|---|
+| jnr-developer | claude-haiku-5-5 | SEARCH/REPLACE patches | escalate to snr |
+| snr-developer | claude-sonnet-5-5 | SEARCH/REPLACE patches | escalate to architect |
+| architect | claude-opus-5-5 | full index.html | report failure |
 
-### Sub-Agent: architect (Tier: architect)
+OpenAI and Gemini equivalents are in `backend/config.py`.
 
-**Model:** anthropic:claude-sonnet-4-5-20250514 (high cost)
-**Tools:** file-read, file-write, shell-exec
-**Scope:** Full codebase with shell access for deep exploration
+## Legacy: repo-scanner
 
-Examples:
-- "refactor the database layer to use a connection pool and resolve the memory leak"
-- "redesign the event pipeline to support async processing"
-- "diagnose and fix the intermittent 502 errors in the API gateway"
-
----
+`agents/repo-scanner/` (framework-detector, deep-scan-agent) comes from the
+original repo-sandbox-agent. It is not used by the voice runtime.
 
 ## Delegation Flow
 
 ```
-User Message
+Spoken request
     │
-    ├── contains repo path ──────────> repo-scanner
-    │                                    ├── framework-detector (Phase 1)
-    │                                    └── deep-scan-agent (Phase 2)
-    │
-    ├── contains edit instruction ───> intent-router
-    │                                    │
-    │                                    └── code-editor
-    │                                         ├── jnr-developer (if jnr)
-    │                                         ├── snr-developer (if snr)
-    │                                         └── architect (if architect)
-    │
-    └── both ────────────────────────> scanner first, then router, then editor
+    ├── new website ───────> generate_site ──> researcher ──> architect (full page)
+    ├── change ────────────> edit_site ──> [researcher if photos] ──> intent-router ──> jnr | snr | architect
+    │                                                       (escalates on failure)
+    ├── undo ──────────────> undo_change ──> store.undo
+    └── "what's on it?" ───> describe_site ──> HTML outline (no LLM)
 ```

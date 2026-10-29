@@ -26,3 +26,9 @@ open-agent-registry
 
 # GitAgent Runtime State
 .gitagent/
+# VoiceSite runtime data (generated websites)
+data/
+
+# Frontend
+node_modules/
+frontend/dist/
