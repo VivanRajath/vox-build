@@ -113,6 +113,8 @@ def agent_body() -> dict:
                             "provider": os.getenv("BOLNA_LLM_PROVIDER", "openai"),
                             "model": os.getenv("BOLNA_LLM_MODEL", "gpt-5.4-mini"),
                             "max_tokens": 200,
+                            # Reasoning models (gpt-5.x) only accept temperature 1.
+                            "temperature": float(os.getenv("BOLNA_LLM_TEMPERATURE", "1")),
                         },
                     },
                     "synthesizer": {
