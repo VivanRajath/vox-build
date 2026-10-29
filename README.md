@@ -74,7 +74,7 @@ During a call, Bolna's cloud calls the backend's `/tools/*` endpoints, so voice 
 1. Push the repo to GitHub.
 2. In [Render](https://render.com): **New + → Blueprint**, then pick the repo. It reads `render.yaml`.
 3. Fill in `BOLNA_API_KEY` and one LLM key when prompted. `TOOL_SECRET` is generated for you.
-4. Once it's live, copy the service URL (e.g. `https://voicesite.onrender.com`) and `TOOL_SECRET` from Render into your local `.env` as `PUBLIC_BASE_URL` and `TOOL_SECRET`, then create the agent:
+4. Once it's live, copy the service URL (e.g. `https://vox-build.onrender.com`) and `TOOL_SECRET` from Render into your local `.env` as `PUBLIC_BASE_URL` and `TOOL_SECRET`, then create the agent:
 
 ```bash
 python scripts/create_agent.py            # prints BOLNA_AGENT_ID

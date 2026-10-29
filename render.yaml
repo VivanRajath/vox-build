@@ -2,7 +2,7 @@
 # Secrets marked sync: false are asked for once in the Render dashboard.
 services:
   - type: web
-    name: voicesite
+    name: vox-build
     runtime: docker
     plan: free
     healthCheckPath: /api/config

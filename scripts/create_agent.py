@@ -6,7 +6,7 @@
                                             (to paste into the dashboard Tools tab)
 
 Needs BOLNA_API_KEY and PUBLIC_BASE_URL (the deployed backend's https URL,
-e.g. https://voicesite.onrender.com) in .env. TOOL_SECRET is optional.
+e.g. https://vox-build.onrender.com) in .env. TOOL_SECRET is optional.
 """
 import json
 import os
@@ -160,7 +160,7 @@ def main() -> None:
     if not API_KEY:
         sys.exit("Set BOLNA_API_KEY in .env")
     if not PUBLIC_BASE_URL.startswith("https://"):
-        sys.exit("Set PUBLIC_BASE_URL in .env to the deployed backend's https URL (e.g. https://voicesite.onrender.com)")
+        sys.exit("Set PUBLIC_BASE_URL in .env to the deployed backend's https URL (e.g. https://vox-build.onrender.com)")
 
     headers = {"Authorization": f"Bearer {API_KEY}"}
     if "--update" in sys.argv:
