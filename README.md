@@ -44,7 +44,7 @@ Live preview iframe ◀── SSE "job_done" ──────┘
 - Typed fallback for every voice action
 - Multilingual speech: Vox replies in your language and writes edit instructions in English
 - **Accounts**: sign in with Google or GitHub
-- **Bring your own model**: each user adds their own API key (Anthropic, OpenAI, Gemini, Groq or any OpenAI-compatible endpoint) and picks a model per tier, with a "Test & load models" check
+- **Settings, no sign-in needed**: the Settings button in the top bar takes any number of API keys (Anthropic, OpenAI, Gemini, Groq or any OpenAI-compatible endpoint, several per provider), each tested before it is saved. Pick a provider and model per tier, and add a Pexels key for photos. When a key is rate limited, the next key for that provider takes over
 - **Ship it**: download the site as a ZIP, or push it to a new or existing GitHub repo in one commit
 
 ## Quick start
@@ -104,7 +104,7 @@ cd frontend && npm run dev        # http://localhost:5173, proxies to :8000
 | `PUBLIC_BASE_URL` | Public https URL of this backend, used in the custom-function URLs |
 | `TOOL_SECRET` | Shared secret Bolna sends as `Authorization: Bearer …` on tool calls |
 | `TOOL_SYNC_WAIT` | Seconds a tool call waits before answering "working on it" (default 8) |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` | LLM that writes the site. The first one set wins, or force one with `LLM_PROVIDER` |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` | Server-wide LLM keys, used after a user's own keys from Settings. Each may hold several comma-separated keys, rotated on rate limits. The first provider set is the default, or force one with `LLM_PROVIDER` |
 | `PEXELS_API_KEY` | Optional. Better stock photos for the researcher; without it photos come from Wikimedia Commons |
 | `MODEL_JNR` / `MODEL_SNR` / `MODEL_ARCHITECT` / `MODEL_RESEARCH` | Optional per-tier model overrides (research defaults to the jnr model) |
 | `SESSION_SECRET` | Signs the login cookie and encrypts stored GitHub tokens and user API keys. Auto-generated into `data/.session_secret` if unset; set it explicitly in production |
@@ -120,13 +120,18 @@ Default tier models:
 | snr (features) | `claude-sonnet-5-5` | `gpt-4.1` | `gemini-2.5-pro` | `openai/gpt-oss-120b` |
 | architect (redesigns) | `claude-opus-5-5` | `gpt-4.1` | `gemini-2.5-pro` | `openai/gpt-oss-120b` |
 
-### Accounts, your own API key, GitHub
+### Settings and accounts
+
+The **Settings** button in the top bar works without signing in: keys are saved to a guest account tied to the browser (encrypted on the server). Signing in later turns that guest into a full account and keeps its keys and projects.
+
+To enable Google / GitHub sign-in (needed for Push to GitHub):
+
 
 1. **Google**: Google Cloud Console > APIs & Services > Credentials > Create OAuth client ID (Web application). Add `http://localhost:8000/auth/google/callback` (and/or `http://localhost:5173/...` for Vite dev, and your deployed URL) as an authorized redirect URI.
 2. **GitHub**: github.com/settings/developers > New OAuth App. Callback URL `http://localhost:8000/auth/github/callback` (a GitHub OAuth App takes one callback URL, so create one app per environment).
 3. Put the four values in `.env` and restart.
 
-A project is owned by whoever first works on it while signed in. Its edits (typed or by voice) use the owner's AI settings and fall back to the server's `.env` keys. Pushing replaces the repo's default branch contents with the current version as one new commit (earlier history is kept).
+A project is owned by the account (or guest) that first works on it. Its edits, typed or by voice, use the owner's keys from Settings first, then the server's `.env` keys. Pushing replaces the repo's default branch contents with the current version as one new commit (earlier history is kept).
 
 ## Repository layout
 

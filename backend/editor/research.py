@@ -2,7 +2,7 @@
 
 brief()        LLM design brief: audience, tone, art direction, palette, sections, image slots
 image_needs()  LLM picks image slots for an edit that mentions pictures
-find_images()  searches Pexels (if PEXELS_API_KEY) or Wikimedia Commons and
+find_images()  searches Pexels (if a Pexels key is set) or Wikimedia Commons and
                downloads the best match into the site's images/ folder
 """
 import asyncio
@@ -13,7 +13,7 @@ import re
 
 import httpx
 
-from .. import config, llm, store
+from .. import llm, store
 from . import prompts
 
 log = logging.getLogger("vox-build.research")
@@ -133,7 +133,7 @@ async def _find_one(client: httpx.AsyncClient, images_dir, need: dict) -> dict |
     queries = [query] + [q for q in [str(need.get("fallback") or "").strip()] if q and q.lower() != query.lower()]
     candidate = None
     for q in queries:
-        if config.PEXELS_API_KEY:
+        if llm.pexels_key():
             candidate = await _search_pexels(client, q)
         if not candidate:
             candidate = await _search_wikimedia(client, q)
@@ -162,7 +162,7 @@ async def _search_pexels(client: httpx.AsyncClient, query: str) -> dict | None:
     r = await client.get(
         PEXELS_API,
         params={"query": query, "per_page": 5, "orientation": "landscape"},
-        headers={"Authorization": config.PEXELS_API_KEY},
+        headers={"Authorization": llm.pexels_key()},
     )
     if r.status_code != 200:
         return None

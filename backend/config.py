@@ -56,7 +56,11 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-ENV_KEYS = {"anthropic": ANTHROPIC_API_KEY, "openai": OPENAI_API_KEY, "gemini": GEMINI_API_KEY, "groq": GROQ_API_KEY}
+# Each variable may hold several comma-separated keys; they're rotated on rate limits.
+ENV_KEYS = {
+    provider: [k.strip() for k in value.split(",") if k.strip()]
+    for provider, value in {"anthropic": ANTHROPIC_API_KEY, "openai": OPENAI_API_KEY, "gemini": GEMINI_API_KEY, "groq": GROQ_API_KEY}.items()
+}
 
 # Optional: better stock photos for the researcher (free key at pexels.com/api).
 # Without it, photos come from Wikimedia Commons.

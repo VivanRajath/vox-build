@@ -11,7 +11,7 @@ const STATUS = {
 // Relative bar heights; the live volume scales them.
 const BARS = [0.45, 0.8, 1, 0.65, 0.35];
 
-export default function VoicePanel({ voice, config, userHasKey, onOpenSettings, picking, onTogglePick, selection, onClearSelection, isBlank }) {
+export default function VoicePanel({ voice, config, aiReady, onOpenSettings, picking, onTogglePick, selection, onClearSelection, isBlank }) {
   const live = voice.state === "active";
   const connecting = voice.state === "connecting" || voice.state === "ringing";
   const voiceReady = config?.voice_enabled;
@@ -53,14 +53,10 @@ export default function VoicePanel({ voice, config, userHasKey, onOpenSettings, 
       )}
 
       {voice.error && <p className="notice is-error" role="alert">{voice.error}</p>}
-      {config?.llm_provider === "none" && !userHasKey && (
+      {!aiReady && (
         <p className="notice is-error">
           No AI model is set up, so changes can't be made yet.{" "}
-          {onOpenSettings ? (
-            <button className="text-btn" onClick={onOpenSettings}>Add your API key</button>
-          ) : (
-            "Sign in to add your own API key."
-          )}
+          <button className="text-btn" onClick={onOpenSettings}>Add an API key in Settings</button>
         </p>
       )}
 

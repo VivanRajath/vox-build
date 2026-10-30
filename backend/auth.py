@@ -44,6 +44,16 @@ def current_user(request: Request) -> dict | None:
     return users.get(request.session.get("uid"))
 
 
+def current_or_guest(request: Request) -> dict:
+    """The signed-in user, or a guest account for this browser so settings
+    (API keys) work without sign-in being configured."""
+    user = current_user(request)
+    if not user:
+        user = users.create_guest()
+        request.session["uid"] = user["id"]
+    return user
+
+
 def require_user(request: Request) -> dict:
     user = current_user(request)
     if not user:
@@ -120,7 +130,12 @@ async def oauth_callback(provider: str, request: Request, code: str = "", state:
             ident, profile = await _github_profile(client, token)
 
     user = current_user(request)
-    if user:
+    if user and user.get("guest") and users.find_by_identity(provider, ident):
+        # Returning user on a new browser: sign into their account, not the guest.
+        user = users.login(provider, ident, profile)
+    elif user:
+        if user.get("guest"):
+            users.promote_guest(user, profile)
         users.link_identity(user, provider, ident)
         users.save(user)
     else:
