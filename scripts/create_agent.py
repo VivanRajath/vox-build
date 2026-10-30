@@ -108,7 +108,8 @@ def agent_body() -> dict:
     return {
         "agent_config": {
             "agent_name": "Vox Build - Vox",
-            "agent_welcome_message": "Hi, I'm Vox! Tell me what website you'd like to build, or what to change.",
+            # Short so Vox starts listening almost as soon as the call connects.
+            "agent_welcome_message": "Hi, I'm Vox. What should we build today?",
             "tasks": [{
                 "task_type": "conversation",
                 "toolchain": {"execution": "sequential", "pipelines": [["transcriber", "llm", "synthesizer"]]},
