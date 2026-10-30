@@ -58,8 +58,8 @@ def _require_project(project_id: str) -> dict:
 
 
 def _claim(request: Request, meta: dict) -> None:
-    """A signed-in user who works on an unowned project becomes its owner,
-    so voice and typed edits run on their AI settings."""
+    """A user (or this browser's guest account) who works on an unowned project
+    becomes its owner, so voice and typed edits run on their AI settings."""
     user = auth.current_user(request)
     if user and not meta.get("owner"):
         store.update(meta["id"], owner=user["id"])
@@ -70,7 +70,7 @@ def _run(project_id: str, coro) -> asyncio.Task:
     owner = users.get(store.load_meta(project_id).get("owner"))
 
     async def with_settings():
-        llm.use_settings(users.llm_settings(owner))
+        llm.use_settings(users.ai_settings(owner))
         return await coro
 
     return _spawn(with_settings())
@@ -93,6 +93,8 @@ async def get_config():
 @app.post("/api/projects")
 async def create_project(request: Request):
     meta = store.create()
+    # A guest account per browser, so keys added in Settings apply to its projects.
+    auth.current_or_guest(request)
     _claim(request, meta)
     return store.load_meta(meta["id"])
 
@@ -252,50 +254,93 @@ def _check_base_url(provider: str, base_url: str) -> str:
     return base_url.strip().rstrip("/")
 
 
-def _llm_form(body: dict) -> tuple[str, str | None, str]:
-    """(provider, api_key or None to reuse the stored one, base_url) from the settings form."""
+def _settings_view(user: dict) -> dict:
+    return {
+        **users.ai_view(user),
+        "user": users.public(user),
+        # Which providers the server's .env already has keys for (never the keys).
+        "server": {
+            "providers": {p: len(keys) for p, keys in config.ENV_KEYS.items() if keys},
+            "default_provider": config.LLM_PROVIDER,
+            "pexels": bool(config.PEXELS_API_KEY),
+        },
+        "default_models": config.DEFAULT_MODELS,
+    }
+
+
+@app.get("/api/settings")
+async def get_settings(request: Request):
+    return _settings_view(auth.current_or_guest(request))
+
+
+@app.post("/api/settings/keys")
+async def add_key(request: Request):
+    """Adds an API key after checking it works (listing models doubles as the check)."""
+    user = auth.current_or_guest(request)
+    body = await request.json()
     provider = str(body.get("provider", ""))
     if provider not in users.PROVIDERS:
         raise HTTPException(400, "Unknown provider")
-    api_key = str(body.get("api_key") or "").strip() or None
-    return provider, api_key, _check_base_url(provider, str(body.get("base_url", "")))
-
-
-@app.put("/api/me/llm")
-async def save_llm(request: Request):
-    user = auth.require_user(request)
-    body = await request.json()
-    provider, api_key, base_url = _llm_form(body)
-    stored = users.llm_settings(user)
-    if not api_key and not (stored and stored["provider"] == provider):
-        raise HTTPException(400, "Add an API key for this provider")
-    models = body.get("models") or {}
-    if provider == "custom" and not all(str(models.get(t) or "").strip() for t in users.TIERS):
-        raise HTTPException(400, "Custom providers need a model for every tier")
-    users.set_llm(user, provider, api_key, base_url, models)
-    return {"user": users.public(user)}
-
-
-@app.delete("/api/me/llm")
-async def clear_llm(request: Request):
-    user = auth.require_user(request)
-    users.clear_llm(user)
-    return {"user": users.public(user)}
-
-
-@app.post("/api/me/llm/models")
-async def llm_models(request: Request):
-    user = auth.require_user(request)
-    provider, api_key, base_url = _llm_form(await request.json())
+    api_key = str(body.get("api_key") or "").strip()
     if not api_key:
-        stored = users.llm_settings(user)
-        api_key = stored["api_key"] if stored and stored["provider"] == provider else None
-    if not api_key:
-        raise HTTPException(400, "Enter an API key first")
+        raise HTTPException(400, "Paste an API key")
+    base_url = _check_base_url(provider, str(body.get("base_url", "")))
     try:
-        return {"models": await llm.list_models(provider, api_key, base_url)}
+        models = await llm.list_models(provider, api_key, base_url)
     except llm.LLMError as e:
         raise HTTPException(400, str(e))
+    entry = users.add_key(user, provider, api_key, base_url, str(body.get("label", "")))
+    return {**_settings_view(user), "added": entry["id"], "models": models}
+
+
+@app.delete("/api/settings/keys/{key_id}")
+async def remove_key(key_id: str, request: Request):
+    user = auth.current_or_guest(request)
+    if not users.remove_key(user, key_id):
+        raise HTTPException(404, "Key not found")
+    return _settings_view(user)
+
+
+@app.post("/api/settings/models/list")
+async def list_models(request: Request):
+    """Models for a provider, using the user's first key for it or the server's."""
+    user = auth.current_or_guest(request)
+    provider = str((await request.json()).get("provider", ""))
+    key = next((k for k in users.ai_view(user)["keys"] if k["provider"] == provider), None)
+    creds = users.key_credentials(user, key["id"]) if key else None
+    if not creds and config.ENV_KEYS.get(provider):
+        creds = (provider, config.ENV_KEYS[provider][0], "")
+    if not creds:
+        raise HTTPException(400, "Add a key for this provider first")
+    try:
+        return {"models": await llm.list_models(*creds)}
+    except llm.LLMError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/settings/models")
+async def save_models(request: Request):
+    user = auth.current_or_guest(request)
+    models = (await request.json()).get("models") or {}
+    for tier in users.TIERS:
+        pick = models.get(tier) or {}
+        if pick.get("provider") == "custom" and not str(pick.get("model") or "").strip():
+            raise HTTPException(400, "Custom providers need a model name")
+    users.set_models(user, models)
+    return _settings_view(user)
+
+
+@app.put("/api/settings/pexels")
+async def save_pexels(request: Request):
+    user = auth.current_or_guest(request)
+    api_key = str((await request.json()).get("api_key") or "").strip()
+    if api_key:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get("https://api.pexels.com/v1/search", params={"query": "coffee", "per_page": 1}, headers={"Authorization": api_key})
+        if r.status_code in (401, 403):
+            raise HTTPException(400, "Pexels rejected that key")
+    users.set_pexels(user, api_key or None)
+    return _settings_view(user)
 
 
 # ---------------------------------------------------------------------------

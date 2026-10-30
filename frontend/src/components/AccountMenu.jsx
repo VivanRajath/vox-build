@@ -41,7 +41,7 @@ export default function AccountMenu({ user, auth, onOpenSettings, onSignedOut })
   return (
     <div className="account" ref={ref}>
       <button className="account-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        {user ? (
+        {user && !user.guest ? (
           <>
             {user.avatar ? <img className="avatar" src={user.avatar} alt="" referrerPolicy="no-referrer" /> : <span className="avatar" />}
             <span className="account-name">{user.name || user.email}</span>
@@ -52,7 +52,7 @@ export default function AccountMenu({ user, auth, onOpenSettings, onSignedOut })
       </button>
       {open && (
         <div className="menu">
-          {user ? (
+          {user && !user.guest ? (
             <>
               <div className="menu-who">
                 <strong>{user.name}</strong>
@@ -69,8 +69,8 @@ export default function AccountMenu({ user, auth, onOpenSettings, onSignedOut })
                 )}
               </div>
               <button className="menu-item" onClick={() => { setOpen(false); onOpenSettings(); }}>
-                AI model & API key
-                <span className="muted">{user.llm?.has_key ? user.llm.provider : "Server key"}</span>
+                Settings
+                <span className="muted">{user.ai?.key_count ? `${user.ai.key_count} key${user.ai.key_count > 1 ? "s" : ""}` : "Server keys"}</span>
               </button>
               <button className="menu-item" onClick={signOut}>Sign out</button>
             </>

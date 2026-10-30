@@ -25,7 +25,10 @@ export const api = {
   me: () => request("/api/me"),
   logout: () => request("/auth/logout", { method: "POST" }),
   loginUrl: (provider) => `/auth/${provider}/login?next=${encodeURIComponent(location.pathname + location.search)}`,
-  saveLlm: (settings) => request("/api/me/llm", { method: "PUT", body: JSON.stringify(settings) }),
-  clearLlm: () => request("/api/me/llm", { method: "DELETE" }),
-  listModels: (settings) => request("/api/me/llm/models", { method: "POST", body: JSON.stringify(settings) }),
+  settings: () => request("/api/settings"),
+  addKey: (key) => request("/api/settings/keys", { method: "POST", body: JSON.stringify(key) }),
+  removeKey: (id) => request(`/api/settings/keys/${id}`, { method: "DELETE" }),
+  listModels: (provider) => request("/api/settings/models/list", { method: "POST", body: JSON.stringify({ provider }) }),
+  saveModels: (models) => request("/api/settings/models", { method: "PUT", body: JSON.stringify({ models }) }),
+  savePexels: (apiKey) => request("/api/settings/pexels", { method: "PUT", body: JSON.stringify({ api_key: apiKey }) }),
 };

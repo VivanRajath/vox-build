@@ -27,9 +27,9 @@ class LLMTruncated(LLMError):
     """The model hit max_tokens. Editors escalate instead of giving up."""
 
 
-# A user's own provider/key/models (users.llm_settings), set per edit task.
-# None means the server's .env configuration.
-_settings: ContextVar[dict | None] = ContextVar("llm_settings", default=None)
+# A user's own keys/models (users.ai_settings), set per edit task.
+# None means the server's .env configuration only.
+_settings: ContextVar[dict | None] = ContextVar("ai_settings", default=None)
 _clients: dict[tuple, object] = {}
 
 
@@ -38,18 +38,30 @@ def use_settings(settings: dict | None) -> None:
     _settings.set(settings)
 
 
-def _target(tier: str) -> tuple[str, str, str, str, bool]:
-    """(provider, api_key, base_url, model, user_chose_model) for this call."""
-    s = _settings.get()
-    if not s:
-        return config.LLM_PROVIDER, config.ENV_KEYS.get(config.LLM_PROVIDER, ""), "", config.model_for(tier), False
-    provider, models = s["provider"], s.get("models") or {}
+def pexels_key() -> str:
+    s = _settings.get() or {}
+    return s.get("pexels_key") or config.PEXELS_API_KEY
+
+
+def _target(tier: str) -> tuple[str, list[dict], str, bool]:
+    """(provider, credentials to rotate through, model, user_chose_model) for this call.
+
+    Credentials are the user's keys for the provider first, then the server's."""
+    s = _settings.get() or {}
     model_tier = config.AGENT_TIER.get(tier, tier)
-    chosen = models.get(model_tier) or ""
-    model = chosen or config.DEFAULT_MODELS.get(provider, {}).get(model_tier, "")
-    if not model:
-        raise LLMError(f"Pick a model for the {model_tier} tier in AI settings")
-    return provider, s["api_key"], s.get("base_url", ""), model, bool(chosen)
+    pick = (s.get("models") or {}).get(model_tier) or {}
+    provider = pick.get("provider") or next(iter(s.get("order") or []), None) or config.LLM_PROVIDER
+    chosen = pick.get("model") or ""
+    if chosen:
+        model = chosen
+    elif provider == config.LLM_PROVIDER:
+        model = config.model_for(tier)  # honours MODEL_* overrides in .env
+    else:
+        model = config.DEFAULT_MODELS.get(provider, {}).get(model_tier, "")
+    creds = list((s.get("keys") or {}).get(provider, [])) + [{"api_key": k, "base_url": ""} for k in config.ENV_KEYS.get(provider, [])]
+    if creds and not model:
+        raise LLMError(f"Pick a model for {model_tier} edits in Settings")
+    return provider, creds, model, bool(chosen)
 
 
 def client(provider: str, api_key: str, base_url: str = ""):
@@ -75,19 +87,31 @@ async def list_models(provider: str, api_key: str, base_url: str = "") -> list[s
 
 async def complete(system: str, user: str, tier: str, max_tokens: int = 16000, json_mode: bool = False) -> str:
     """json_mode asks OpenAI-compatible providers for a JSON object; callers still parse defensively."""
-    provider, api_key, base_url, model, chosen = _target(tier)
-    if provider == "anthropic" and api_key:
-        return await _complete_anthropic(client(provider, api_key), system, user, model, tier, max_tokens)
-    if provider in OPENAI_COMPATIBLE and api_key:
-        # Rate-limit spillover only when the model wasn't picked by the user.
+    provider, creds, model, chosen = _target(tier)
+    if not creds:
+        raise LLMError("No AI key is set up. Add one in Settings")
+    if provider == "anthropic":
+        return await _complete_anthropic(creds, system, user, model, tier, max_tokens)
+    if provider in OPENAI_COMPATIBLE:
+        # Model spillover only when the model wasn't picked by the user.
         fallbacks = [] if chosen else config.RATE_LIMIT_FALLBACKS.get(provider, [])
-        return await _complete_openai(
-            client(provider, api_key, base_url), provider, fallbacks, system, user, model, tier, max_tokens, json_mode
-        )
-    raise LLMError("No LLM configured. Add your API key in AI settings, or set one in the server's .env")
+        return await _complete_openai(creds, provider, fallbacks, system, user, model, tier, max_tokens, json_mode)
+    raise LLMError(f"Unknown AI provider {provider!r}")
 
 
-async def _complete_anthropic(api: anthropic.AsyncAnthropic, system: str, user: str, model: str, tier: str, max_tokens: int) -> str:
+async def _complete_anthropic(creds: list[dict], system: str, user: str, model: str, tier: str, max_tokens: int) -> str:
+    """Tries each key in turn while they're rate limited."""
+    for i, cred in enumerate(creds):
+        last = i == len(creds) - 1
+        api = client("anthropic", cred["api_key"])
+        try:
+            return await _anthropic_once(api if last else api.with_options(max_retries=0), system, user, model, tier, max_tokens)
+        except anthropic.RateLimitError as e:
+            if last:
+                raise LLMError("The model is rate limited right now, try again in a moment") from e
+
+
+async def _anthropic_once(api: anthropic.AsyncAnthropic, system: str, user: str, model: str, tier: str, max_tokens: int) -> str:
     kwargs = dict(
         model=model,
         max_tokens=max_tokens,
@@ -102,8 +126,8 @@ async def _complete_anthropic(api: anthropic.AsyncAnthropic, system: str, user: 
             )
         else:
             response = await api.messages.create(**kwargs)
-    except anthropic.RateLimitError as e:
-        raise LLMError("The model is rate limited right now, try again in a moment") from e
+    except anthropic.RateLimitError:
+        raise  # the caller moves on to the next key
     except anthropic.APIStatusError as e:
         raise LLMError(f"Model API error ({e.status_code}): {e.message}") from e
     except anthropic.APIConnectionError as e:
@@ -140,13 +164,16 @@ def _openai_params(provider: str, model: str, tier: str, max_tokens: int, json_m
 
 
 async def _complete_openai(
-    api: openai.AsyncOpenAI, provider: str, fallbacks: list[str], system: str, user: str, model: str, tier: str, max_tokens: int,
+    creds: list[dict], provider: str, fallbacks: list[str], system: str, user: str, model: str, tier: str, max_tokens: int,
     json_mode: bool = False,
 ) -> str:
-    candidates = [model] + [m for m in fallbacks if m != model]
-    for i, candidate in enumerate(candidates):
-        last = i == len(candidates) - 1
-        # With a fallback available, fail over immediately instead of letting the SDK back off.
+    # Every key on the chosen model first (same quality), then sibling models.
+    models = [model] + [m for m in fallbacks if m != model]
+    attempts = [(m, cred) for m in models for cred in creds]
+    for i, (candidate, cred) in enumerate(attempts):
+        last = i == len(attempts) - 1
+        api = client(provider, cred["api_key"], cred.get("base_url", ""))
+        # With another attempt left, fail over immediately instead of letting the SDK back off.
         attempt = api if last else api.with_options(max_retries=0)
         try:
             response = await attempt.chat.completions.create(

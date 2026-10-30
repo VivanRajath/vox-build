@@ -9,7 +9,7 @@ import AccountMenu from "./components/AccountMenu.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
 import GitHubModal from "./components/GitHubModal.jsx";
 import Composer from "./components/Composer.jsx";
-import { DownloadIcon, GitHubIcon, LinkIcon, Logo } from "./components/icons.jsx";
+import { DownloadIcon, GitHubIcon, LinkIcon, Logo, SettingsIcon } from "./components/icons.jsx";
 
 const TIER_LABEL = {
   research: "Researcher",
@@ -65,6 +65,7 @@ export default function App() {
   const [picking, setPicking] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [user, setUser] = useState(null);
+  const [aiReady, setAiReady] = useState(true);
   const [dialog, setDialog] = useState(null); // "settings" | "github"
   const [tab, setTab] = useState("activity");
   const [copied, setCopied] = useState(false);
@@ -81,6 +82,8 @@ export default function App() {
 
   useEffect(() => {
     if (!projectId) return;
+    // After the project exists, so this browser's guest account is already in the session cookie.
+    api.settings().then(applySettings).catch(() => {});
     api.getProject(projectId).then((m) => {
       setMeta(m);
       setSelection(m.selection);
@@ -134,6 +137,11 @@ export default function App() {
     };
     return () => source.close();
   }, [projectId, addLog]);
+
+  function applySettings(view) {
+    setAiReady(view.keys.length > 0 || Object.keys(view.server.providers).length > 0);
+    setUser(view.user);
+  }
 
   const handleSelect = useCallback(
     (sel) => {
@@ -199,6 +207,9 @@ export default function App() {
           <button className="btn primary" onClick={() => setDialog("github")}>
             <GitHubIcon /> <span>Push to GitHub</span>
           </button>
+          <button className="btn quiet" onClick={() => setDialog("settings")} title="API keys, models and photos">
+            <SettingsIcon /> <span className="hide-sm">Settings</span>
+          </button>
           <AccountMenu
             user={user}
             auth={config?.auth}
@@ -208,9 +219,7 @@ export default function App() {
         </div>
       </header>
 
-      {dialog === "settings" && user && (
-        <SettingsModal user={user} defaults={config?.default_models} onClose={() => setDialog(null)} onSaved={setUser} />
-      )}
+      {dialog === "settings" && <SettingsModal onClose={() => setDialog(null)} onChanged={applySettings} />}
       {dialog === "github" && (
         <GitHubModal
           projectId={projectId}
@@ -242,8 +251,8 @@ export default function App() {
           <VoicePanel
             voice={voice}
             config={config}
-            userHasKey={!!user?.llm?.has_key}
-            onOpenSettings={user ? () => setDialog("settings") : null}
+            aiReady={aiReady}
+            onOpenSettings={() => setDialog("settings")}
             picking={picking}
             onTogglePick={() => setPicking((p) => !p)}
             selection={selection}
