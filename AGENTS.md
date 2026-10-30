@@ -5,7 +5,7 @@
 ```
 Vox (Bolna voice agent)  ── bolna/agent_prompt.md, scripts/create_agent.py
 │   Talks to the user, calls custom functions:
-│   generate_site · edit_site · undo_change · describe_site
+│   generate_site · edit_site · undo_change · describe_site · check_progress
 │
 └── vox-build backend (orchestrator)  ── backend/main.py
     │
@@ -48,6 +48,7 @@ Every builder also gets the shared `DESIGN_PRINCIPLES` in `backend/editor/prompt
 | edit_site | project_id, instruction | `{status, message}` |
 | undo_change | project_id | `{status, message}` |
 | describe_site | project_id | `{status, message}` |
+| check_progress | project_id | `{status, message}` for the latest background job |
 
 `status` is `done`, `in_progress` (finishes in the background, preview updates via SSE) or `failed`.
 

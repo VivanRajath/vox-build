@@ -52,6 +52,13 @@ FUNCTIONS = [
         "properties": {"project_id": PROJECT_ID_PARAM},
     },
     {
+        "name": "check_progress",
+        "description": "Check whether a website build or change that was still in progress has finished, and what it did. "
+                       "Call it at the start of your next turn after any function returned in_progress, and whenever the user asks if it's done.",
+        "pre_call_message": "",
+        "properties": {"project_id": PROJECT_ID_PARAM},
+    },
+    {
         "name": "describe_site",
         "description": "Get an outline of what is currently on the website. Use when the user asks what is on the page.",
         "pre_call_message": "Let me look.",
@@ -146,6 +153,11 @@ def agent_body() -> dict:
                     # Long sessions with quiet stretches while the user looks at the preview.
                     "call_terminate": 1200,
                     "hangup_after_silence": 120,
+                    # Builds finish in the background; after a short quiet spell Vox nudges
+                    # the user to look at the preview instead of asking if they're still there.
+                    "check_if_user_online": True,
+                    "trigger_user_online_message_after": int(os.getenv("BOLNA_NUDGE_AFTER", "12")),
+                    "check_user_online_message": "It should be on your screen now. What would you like to change next?",
                 },
             }],
         },

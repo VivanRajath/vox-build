@@ -365,6 +365,30 @@ async def tool_undo(request: Request):
     return {"status": "done" if result["ok"] else "failed", "message": result["message"]}
 
 
+STAGE_SPEECH = {
+    "research": "the researcher is planning the design",
+    "team": "Font Knight is choosing fonts and the copywriter is writing the text",
+    "architect": "the architect is building the page",
+    "critic": "the design critic is polishing it",
+    "jnr": "the developer is making the change",
+    "snr": "the senior developer is making the change",
+}
+
+
+@app.post("/tools/check_progress")
+async def tool_check_progress(request: Request):
+    project_id = _tool_project(await _tool_args(request))
+    job = events.job(project_id)
+    if not job:
+        return {"status": "idle", "message": "Nothing is being built right now."}
+    if job["state"] == "working":
+        stage = STAGE_SPEECH.get(job.get("stage"), "it is still working")
+        return {"status": "in_progress", "message": f"Still working: {stage}. It should be ready in a few seconds."}
+    if job["state"] == "failed":
+        return {"status": "failed", "message": f"The last change didn't work: {job.get('reason', 'unknown error')}"}
+    return {"status": "done", "message": f"Finished. {job.get('summary', '')}"}
+
+
 @app.post("/tools/describe_site")
 async def tool_describe(request: Request):
     project_id = _tool_project(await _tool_args(request))
