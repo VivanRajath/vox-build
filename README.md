@@ -2,9 +2,38 @@
 
 **Build and edit a website by talking to it.**
 
-Describe a website out loud and it appears. Then keep talking: *"make the header dark green"*, *"add a testimonials section"*, *"undo that"*. Click any element and say *"make **this** bigger"*. Every change lands in the live preview within seconds while the voice agent, Vox, talks back.
+[![Pitch deck](https://img.shields.io/badge/Pitch_deck-Open-C2331F?style=for-the-badge)](https://vivanrajath.github.io/buildathon-deck/)
+[![Demo video](https://img.shields.io/badge/Demo_video-Watch_on_Loom-15171C?style=for-the-badge)](https://www.loom.com/share/fc5195a409e84af18a43ca9baddb31f4)
+[![Bolna Buildathon](https://img.shields.io/badge/Bolna-Buildathon_2026-4A505A?style=for-the-badge)](https://www.bolna.ai/symphony/buildathon)
 
-Built for the [Bolna Buildathon](https://www.bolna.ai/symphony/buildathon) on [Bolna](https://www.bolna.ai) voice AI.
+Describe a website out loud and it appears. Then keep talking: *"make the header dark green"*, *"add a testimonials section"*, *"undo that"*. Click any element and say *"make **this** bigger"*. Every change lands in the live preview while the voice agent, Vox, talks back.
+
+Vox is a [Bolna](https://www.bolna.ai) voice agent. Behind it, a team of AI agents researches, writes, designs and builds the site while you watch.
+
+## Pitch deck and demo
+
+| | |
+|---|---|
+| **Pitch deck** | [vivanrajath.github.io/buildathon-deck](https://vivanrajath.github.io/buildathon-deck/): 13 slides on the problem, the product, the agent team and how it is built on Bolna. Use the arrow keys, click or swipe; `F` for full screen. |
+| **Demo video** | [Watch on Loom](https://www.loom.com/share/fc5195a409e84af18a43ca9baddb31f4). It is also embedded on slide 4 of the deck. |
+
+## The agent team
+
+Vox is the only agent you talk to. Every other agent has one job, and its persona lives in `agents/*/SOUL.md`, loaded as a live system prompt.
+
+| Agent | Job |
+|---|---|
+| **Vox** | The Bolna voice agent. Listens, talks back and calls the build functions. |
+| **Researcher** | Writes the design brief (audience, tone, art direction, palette, sections) and finds real photos for every image slot. |
+| **Font Knight** | Picks a real Google Fonts pairing and Lucide icons, searched from the live catalogues. |
+| **Copywriter** | Writes headlines, calls to action and section copy in the brief's tone. |
+| **Architect** | Builds the full page from the plan, and handles redesigns. |
+| **Design Critic** | Reviews every new page against the design principles and patches the worst issues. |
+| **Intent Router** | Sorts each spoken edit into small, bigger or full. |
+| **Junior Dev** | A fast, cheap model for small tweaks, applied as precise patches. |
+| **Senior Dev** | A stronger model for new sections and layout changes. |
+
+A new site goes **Researcher, then Font Knight + Copywriter + photo search in parallel, then Architect, then Design Critic**. An edit goes through the Intent Router to the cheapest developer that can do it, and moves up a level automatically if its patch can't be applied. See [AGENTS.md](AGENTS.md) for the full hierarchy.
 
 ## How it works
 
@@ -18,34 +47,34 @@ Mic button ── @bolna/web-call ───────────────�
    │                                      /tools/edit_site  ◀── custom function ──┘
    │                                         │                  (POST, mid-conversation)
    │                                         ▼
-   │                                      intent-router → jnr / snr / architect
+   │                                      agent team (router → jnr / snr / architect)
    │                                         │   (cheap model → strong model)
    │                                         ▼
-   │                                      new version of index.html
+   │                                      new version of the site
    ▼                                         │
 Live preview iframe ◀── SSE "job_done" ──────┘
 ```
 
 1. The browser starts a **Bolna Web Call** and passes the current `project_id` as `user_data`. Bolna substitutes it into the agent prompt.
-2. When you ask for a change, the Bolna agent calls a **custom function** (`generate_site`, `edit_site`, `undo_change`, `describe_site`) on this backend.
-3. For a new site, the **researcher** first writes a design brief (audience, tone, palette, Google Fonts, sections and their elements) and downloads real photos for each image slot into the site. Edits that mention photos trigger a fresh image search.
-4. The **intent-router** picks a tier. Small tweaks go to a fast model that returns tiny SEARCH/REPLACE patches. Feature additions go to a standard model. Redesigns go to the top model, which rewrites the whole page. A patch that fails to apply escalates to the next tier automatically.
+2. When you ask for something, Vox calls a **custom function** on this backend: `generate_site`, `edit_site`, `undo_change`, `describe_site` or `check_progress`.
+3. For a new site, the planning agents (Researcher, Font Knight, Copywriter) prepare the brief, type, copy and photos; the Architect builds the page and the Design Critic reviews it.
+4. For an edit, the **Intent Router** picks a developer. Small tweaks go to a fast model that returns tiny SEARCH/REPLACE patches, features to a standard model, redesigns to the top model.
 5. The new version is saved (with undo history) and pushed to the browser over **Server-Sent Events**. The preview reloads and keeps your scroll position.
-6. Quick edits come back within `TOOL_SYNC_WAIT` seconds, so Vox can confirm the exact change. Slower ones return "working on it" right away and land on screen when they're done, so the call never goes silent.
+6. Quick edits come back within `TOOL_SYNC_WAIT` seconds, so Vox can confirm the exact change. Longer builds return "working on it" right away, finish in the background, and Vox reports back with `check_progress`, so the call never goes silent.
 
-### Features
+## Features
 
-- Voice-first site generation and editing (Bolna Web Call SDK + custom functions)
-- **Researcher agent**: plans each site (audience, palette, fonts, sections) and finds real, relevant photos
+- **Voice-first** site generation and editing (Bolna Web Call SDK + custom functions)
 - **Point and speak**: click an element in the preview, then say "make this rounder"
-- Undo by voice, plus a clickable version timeline
-- Cost- and latency-aware model tiers with automatic escalation
-- Desktop / tablet / mobile preview sizes
-- Typed fallback for every voice action
-- Multilingual speech: Vox replies in your language and writes edit instructions in English
+- **Undo by voice**, plus a clickable version timeline
+- **Ask about the page**: "what's on my page?" gets a spoken outline
+- **Multilingual**: Vox replies in your language and writes edit instructions in English
+- **Real design inputs**: researched briefs, real Google Fonts, real icons, real photos
+- **Cost- and latency-aware** model tiers with automatic escalation
+- **Settings, no sign-in needed**: add any number of API keys (Anthropic, OpenAI, Gemini, Groq or any OpenAI-compatible endpoint, several per provider), each tested before it is saved. Pick a provider and model per tier and add a Pexels key for photos. When a key is rate limited, the next key for that provider takes over
 - **Accounts**: sign in with Google or GitHub
-- **Settings, no sign-in needed**: the Settings button in the top bar takes any number of API keys (Anthropic, OpenAI, Gemini, Groq or any OpenAI-compatible endpoint, several per provider), each tested before it is saved. Pick a provider and model per tier, and add a Pexels key for photos. When a key is rate limited, the next key for that provider takes over
 - **Ship it**: download the site as a ZIP, or push it to a new or existing GitHub repo in one commit
+- Desktop / tablet / mobile preview sizes, and a typed fallback for every voice action
 
 ## Quick start
 
@@ -116,7 +145,7 @@ Default tier models:
 
 | Tier | Anthropic | OpenAI | Gemini | Groq |
 |---|---|---|---|---|
-| jnr (small tweaks) | `claude-haiku-5-5` | `gpt-4.1-mini` | `gemini-2.5-flash` | `openai/gpt-oss-20b` |
+| jnr (small tweaks) | `claude-haiku-5-5` | `gpt-4.1-mini` | `gemini-2.5-flash` | `qwen/qwen3.8-27b` |
 | snr (features) | `claude-sonnet-5-5` | `gpt-4.1` | `gemini-2.5-pro` | `openai/gpt-oss-120b` |
 | architect (redesigns) | `claude-opus-5-5` | `gpt-4.1` | `gemini-2.5-pro` | `openai/gpt-oss-120b` |
 
@@ -125,7 +154,6 @@ Default tier models:
 The **Settings** button in the top bar works without signing in: keys are saved to a guest account tied to the browser (encrypted on the server). Signing in later turns that guest into a full account and keeps its keys and projects.
 
 To enable Google / GitHub sign-in (needed for Push to GitHub):
-
 
 1. **Google**: Google Cloud Console > APIs & Services > Credentials > Create OAuth client ID (Web application). Add `http://localhost:8000/auth/google/callback` (and/or `http://localhost:5173/...` for Vite dev, and your deployed URL) as an authorized redirect URI.
 2. **GitHub**: github.com/settings/developers > New OAuth App. Callback URL `http://localhost:8000/auth/github/callback` (a GitHub OAuth App takes one callback URL, so create one app per environment).
@@ -166,4 +194,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the design details and [AGENTS.md](AG
 
 ---
 
-Built by Vivan Rajath for the Bolna Buildathon.
+Built by Vivan Rajath for the [Bolna Buildathon 2026](https://www.bolna.ai/symphony/buildathon). [Pitch deck](https://vivanrajath.github.io/buildathon-deck/) · [Demo video](https://www.loom.com/share/fc5195a409e84af18a43ca9baddb31f4)
