@@ -1,6 +1,6 @@
 """researcher: plans a site before it is built and finds real photos for it.
 
-brief()        LLM design brief: audience, tone, palette, fonts, sections, image slots
+brief()        LLM design brief: audience, tone, art direction, palette, sections, image slots
 image_needs()  LLM picks image slots for an edit that mentions pictures
 find_images()  searches Pexels (if PEXELS_API_KEY) or Wikimedia Commons and
                downloads the best match into the site's images/ folder
@@ -32,8 +32,13 @@ BRIEF_SHAPE = """{
   "industry": "short industry label",
   "audience": "who the site is for",
   "tone": "3-5 words describing voice and mood",
-  "palette": {"primary": "#hex", "secondary": "#hex", "accent": "#hex", "background": "#hex", "text": "#hex"},
-  "fonts": {"heading": "Google Font family", "body": "Google Font family"},
+  "style": {
+    "direction": "a named aesthetic, e.g. warm editorial, Swiss minimal, bold brutalist, quiet luxury, retro print",
+    "layout": "how the page is composed: grids, asymmetry, full-bleed images, whitespace",
+    "type_mood": "what the typefaces should feel like (font-knight picks the families)",
+    "signature": "one memorable design detail that makes this site its own"
+  },
+  "palette": {"primary": "#hex", "secondary": "#hex", "accent": "#hex", "background": "#hex", "surface": "#hex", "text": "#hex"},
   "sections": [{"id": "hero", "purpose": "what it achieves", "elements": ["concrete element", "..."]}],
   "images": [{"slot": "hero", "query": "2-4 word photo search query", "fallback": "1-2 word generic subject", "alt": "alt text"}]
 }"""
@@ -44,11 +49,20 @@ async def brief(description: str) -> dict:
         f"{prompts.soul('research')}\n\nReturn ONLY a JSON object with this shape (5-8 sections, "
         f"3-{MAX_IMAGES} images, slot names are short lowercase ids):\n{BRIEF_SHAPE}"
     )
-    try:
-        raw = await llm.complete(system, f"Website description: {description}", "research", 3000)
-        data = _parse_json(raw)
-    except (llm.LLMError, ValueError) as e:
-        log.warning("design brief failed: %s", e)
+    data: dict = {}
+    # Models occasionally answer with an empty or half-shaped object; one retry fixes almost all of them.
+    for attempt in range(2):
+        try:
+            raw = await llm.complete(system, f"Website description: {description}", "research", 3500, json_mode=True)
+            data = parse_json(raw)
+        except (llm.LLMError, ValueError) as e:
+            log.warning("design brief failed (attempt %d): %s", attempt + 1, e)
+            data = {}
+            continue
+        if data.get("sections") and data.get("palette"):
+            break
+        log.warning("design brief incomplete (attempt %d): keys %s", attempt + 1, sorted(data))
+    if not data.get("sections"):
         return {}
     data["images"] = [i for i in data.get("images", []) if isinstance(i, dict) and i.get("query")][:MAX_IMAGES]
     return data
@@ -68,8 +82,8 @@ async def image_needs(instruction: str, brief_data: dict | None) -> list[dict]:
         "with 1-4 images, or an empty list if no new photos are needed."
     )
     try:
-        raw = await llm.complete(system, f"{context}Requested change: {instruction}", "research", 1500)
-        items = _parse_json(raw).get("images", [])
+        raw = await llm.complete(system, f"{context}Requested change: {instruction}", "research", 1500, json_mode=True)
+        items = parse_json(raw).get("images", [])
     except (llm.LLMError, ValueError) as e:
         log.warning("image planning failed: %s", e)
         return []
@@ -97,7 +111,7 @@ def notes_for_prompt(brief_data: dict | None, images: list[dict]) -> str:
     """Research notes appended to the developer prompt."""
     parts = []
     if brief_data:
-        compact = {k: brief_data[k] for k in ("business", "industry", "audience", "tone", "palette", "fonts", "sections") if k in brief_data}
+        compact = {k: brief_data[k] for k in ("business", "industry", "audience", "tone", "style", "palette", "sections") if k in brief_data}
         parts.append("Design brief from the researcher (follow it):\n" + json.dumps(compact, indent=1))
     if images:
         lines = [f'- {img["slot"]}: src="{img["path"]}" alt="{img["alt"]}"' for img in images]
@@ -194,7 +208,7 @@ async def _search_wikimedia(client: httpx.AsyncClient, query: str) -> dict | Non
     }
 
 
-def _parse_json(raw: str) -> dict:
+def parse_json(raw: str) -> dict:
     start, end = raw.find("{"), raw.rfind("}")
     if start == -1 or end <= start:
         raise ValueError("no JSON object in model output")

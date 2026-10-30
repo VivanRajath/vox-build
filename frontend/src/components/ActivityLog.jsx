@@ -15,7 +15,7 @@ export default function ActivityLog({ entries, tierLabel, isBlank }) {
         <p className="feed-empty-title">{isBlank ? "Start with a description" : "No changes yet in this session"}</p>
         <p>
           {isBlank
-            ? "Tell Vox what the business is, who it's for and how it should feel. A researcher picks colours, fonts and photos before the first version is built."
+            ? "Tell Vox what the business is, who it's for and how it should feel. A researcher, Font Knight and a copywriter plan the site, the architect builds it and a design critic reviews it."
             : "Ask for a change by voice or type it below. Each request and its result appears here."}
         </p>
       </div>
@@ -27,11 +27,18 @@ export default function ActivityLog({ entries, tierLabel, isBlank }) {
       {entries.map((e) => (
         <li key={e.id} className={`entry is-${e.kind}`}>
           <div className="entry-head">
-            <span className="entry-who">{e.kind === "user" ? "You" : e.kind === "research" ? "Researcher" : "Vox"}</span>
+            <span className="entry-who">{e.kind === "user" ? "You" : e.who || (e.kind === "research" ? "Researcher" : "Vox")}</span>
             {e.tier && e.kind !== "user" && <span className="entry-tier">{tierLabel[e.tier] || e.tier}</span>}
             <time className="entry-time">{TIME.format(e.ts)}</time>
           </div>
           <p className="entry-text">{e.text}</p>
+          {e.fonts?.heading && (
+            <div className="specimen">
+              {e.fonts.link && <link rel="stylesheet" href={e.fonts.link} />}
+              <span style={{ fontFamily: e.fonts.css?.heading }}>{e.fonts.heading}</span>
+              <span style={{ fontFamily: e.fonts.css?.body }}>{e.fonts.body}</span>
+            </div>
+          )}
           {e.palette && (
             <div className="swatches" aria-label="Researched palette">
               {Object.entries(e.palette).map(([name, color]) => (

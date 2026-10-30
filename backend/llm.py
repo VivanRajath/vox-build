@@ -23,6 +23,10 @@ class LLMError(RuntimeError):
     pass
 
 
+class LLMTruncated(LLMError):
+    """The model hit max_tokens. Editors escalate instead of giving up."""
+
+
 # A user's own provider/key/models (users.llm_settings), set per edit task.
 # None means the server's .env configuration.
 _settings: ContextVar[dict | None] = ContextVar("llm_settings", default=None)
@@ -40,7 +44,7 @@ def _target(tier: str) -> tuple[str, str, str, str, bool]:
     if not s:
         return config.LLM_PROVIDER, config.ENV_KEYS.get(config.LLM_PROVIDER, ""), "", config.model_for(tier), False
     provider, models = s["provider"], s.get("models") or {}
-    model_tier = "jnr" if tier == "research" else tier
+    model_tier = config.AGENT_TIER.get(tier, tier)
     chosen = models.get(model_tier) or ""
     model = chosen or config.DEFAULT_MODELS.get(provider, {}).get(model_tier, "")
     if not model:
@@ -69,14 +73,17 @@ async def list_models(provider: str, api_key: str, base_url: str = "") -> list[s
     return sorted(m.id.removeprefix("models/") for m in page.data)
 
 
-async def complete(system: str, user: str, tier: str, max_tokens: int = 16000) -> str:
+async def complete(system: str, user: str, tier: str, max_tokens: int = 16000, json_mode: bool = False) -> str:
+    """json_mode asks OpenAI-compatible providers for a JSON object; callers still parse defensively."""
     provider, api_key, base_url, model, chosen = _target(tier)
     if provider == "anthropic" and api_key:
         return await _complete_anthropic(client(provider, api_key), system, user, model, tier, max_tokens)
     if provider in OPENAI_COMPATIBLE and api_key:
         # Rate-limit spillover only when the model wasn't picked by the user.
         fallbacks = [] if chosen else config.RATE_LIMIT_FALLBACKS.get(provider, [])
-        return await _complete_openai(client(provider, api_key, base_url), provider, fallbacks, system, user, model, tier, max_tokens)
+        return await _complete_openai(
+            client(provider, api_key, base_url), provider, fallbacks, system, user, model, tier, max_tokens, json_mode
+        )
     raise LLMError("No LLM configured. Add your API key in AI settings, or set one in the server's .env")
 
 
@@ -106,11 +113,18 @@ async def _complete_anthropic(api: anthropic.AsyncAnthropic, system: str, user: 
         raise LLMError("The model declined this request")
     text = "".join(block.text for block in response.content if block.type == "text")
     if response.stop_reason == "max_tokens":
-        raise LLMError("The model ran out of room before finishing")
+        raise LLMTruncated("The model ran out of room before finishing")
     return text
 
 
-def _openai_params(provider: str, model: str, tier: str, max_tokens: int) -> dict:
+def _limit_message(e: openai.APIStatusError) -> str:
+    text = str(e.message).lower()
+    if "per day" in text or "tpd" in text or "rpd" in text:
+        return "The model's daily token limit is used up. Add more quota or switch the model in AI settings"
+    return "The model is rate limited right now, try again in a moment"
+
+
+def _openai_params(provider: str, model: str, tier: str, max_tokens: int, json_mode: bool = False) -> dict:
     # Gemini's compatibility layer and most other OpenAI-compatible servers take max_tokens;
     # newer OpenAI models want max_completion_tokens.
     params = {"max_tokens": max_tokens} if provider in ("gemini", "custom") else {"max_completion_tokens": max_tokens}
@@ -120,11 +134,14 @@ def _openai_params(provider: str, model: str, tier: str, max_tokens: int) -> dic
     elif provider == "groq" and "qwen" in model:
         # Keep Qwen's <think> output out of the content we parse.
         params["extra_body"] = {"reasoning_format": "hidden"}
+    if json_mode:
+        params["response_format"] = {"type": "json_object"}
     return params
 
 
 async def _complete_openai(
-    api: openai.AsyncOpenAI, provider: str, fallbacks: list[str], system: str, user: str, model: str, tier: str, max_tokens: int
+    api: openai.AsyncOpenAI, provider: str, fallbacks: list[str], system: str, user: str, model: str, tier: str, max_tokens: int,
+    json_mode: bool = False,
 ) -> str:
     candidates = [model] + [m for m in fallbacks if m != model]
     for i, candidate in enumerate(candidates):
@@ -135,18 +152,24 @@ async def _complete_openai(
             response = await attempt.chat.completions.create(
                 model=candidate,
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                **_openai_params(provider, candidate, tier, max_tokens),
+                **_openai_params(provider, candidate, tier, max_tokens, json_mode),
             )
             break
         except openai.RateLimitError as e:
             if last:
-                raise LLMError("The model is rate limited right now, try again in a moment") from e
+                raise LLMError(_limit_message(e)) from e
         except openai.APIStatusError as e:
+            # Groq answers 413 when prompt + max_tokens exceeds the model's per-minute quota;
+            # a sibling model has its own quota, so treat it like a rate limit.
+            if e.status_code == 413 and not last:
+                continue
+            if e.status_code == 413:
+                raise LLMError("This page is too large for the model's per-minute token limit. Try again in a minute or use a bigger model") from e
             raise LLMError(f"Model API error ({e.status_code}): {e.message}") from e
         except openai.APIConnectionError as e:
             raise LLMError("Could not reach the model API") from e
 
     choice = response.choices[0]
     if choice.finish_reason == "length":
-        raise LLMError("The model ran out of room before finishing")
+        raise LLMTruncated("The model ran out of room before finishing")
     return choice.message.content or ""

@@ -238,6 +238,9 @@ p { margin: 0; }
 .feed-end { height: 0; }
 
 .swatches { display: flex; gap: 4px; margin-top: 8px; }
+.specimen { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.specimen span:first-child { font-size: 20px; line-height: 1.2; }
+.specimen span:last-child { font-size: 14px; color: var(--ink-2); }
 .swatch { width: 20px; height: 20px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
 .thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 8px; }
 .thumbs img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 4px; background: var(--surface-2); }

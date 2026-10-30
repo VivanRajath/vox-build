@@ -3,17 +3,24 @@
 jnr/snr tiers return small SEARCH/REPLACE patches (fast); the architect tier
 rewrites the whole page. A patch that fails to parse or apply escalates to
 the next tier, ending in a full rewrite.
+
+A new site is planned by a small team first: the researcher writes the brief,
+then font-knight (type and icons), the copywriter and the photo search run in
+parallel, the architect builds the page and the design critic reviews it.
 """
 import asyncio
 import json
+import logging
 import re
 import textwrap
 from collections import defaultdict
 from html.parser import HTMLParser
 
-from .. import events, llm, store
-from . import prompts, research
+from .. import config, events, llm, store
+from . import copywriter, fontknight, prompts, research
 from .router import ESCALATION, route
+
+log = logging.getLogger("vox-build.editor")
 
 _locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
@@ -27,8 +34,9 @@ DASH_RE = re.compile(r"\s*(?:—|&mdash;|&#8212;)\s*|–|&ndash;|&#8211;")
 
 # Patches are small; whole pages need room. Lower caps also keep requests
 # inside per-minute token quotas on providers like Groq.
+# Reasoning models spend part of the budget thinking, so whole pages get headroom.
 PATCH_MAX_TOKENS = 4096
-FULL_MAX_TOKENS = 12000
+FULL_MAX_TOKENS = 16000
 
 
 class EditFailed(Exception):
@@ -42,12 +50,13 @@ class EditFailed(Exception):
 async def generate(project_id: str, description: str) -> dict:
     async with _locks[project_id]:
         events.publish(project_id, {"type": "job_started", "kind": "generate", "instruction": description, "tier": "research"})
-        notes = await _research_for_generate(project_id, description)
+        notes, brief = await _plan_site(project_id, description)
         events.publish(project_id, {"type": "job_stage", "tier": "architect"})
         try:
             raw = await llm.complete(prompts.GENERATE_SYSTEM, prompts.generate_user(description, notes), "architect", FULL_MAX_TOKENS)
             html = _parse_full(raw)
             summary = _parse_summary(raw) or "Built your new website."
+            html = await _review(project_id, html, brief)
             version = store.commit(project_id, {"index.html": html}, summary, description, "architect")
         except (llm.LLMError, EditFailed) as e:
             return _fail(project_id, description, str(e))
@@ -60,17 +69,17 @@ async def edit(project_id: str, instruction: str) -> dict:
         events.publish(project_id, {"type": "job_started", "kind": "edit", "instruction": instruction, "tier": tier})
         html = store.read_index(project_id)
         meta = store.load_meta(project_id)
-        notes = ""
+        notes = [_brief_reminder(meta.get("brief"))]
         if research.wants_images(instruction):
             events.publish(project_id, {"type": "job_stage", "tier": "research"})
             needs = await research.image_needs(instruction, meta.get("brief"))
             images = await research.find_images(project_id, needs)
             _publish_research(project_id, None, images)
-            notes = research.notes_for_prompt(None, images)
+            notes.insert(0, research.notes_for_prompt(None, images))
             # Fresh photos only land in the page through a patch or rewrite, so start at snr.
             tier = "snr" if tier == "jnr" else tier
             events.publish(project_id, {"type": "job_stage", "tier": tier})
-        user = prompts.edit_user(instruction, html, meta.get("selection"), notes or _brief_reminder(meta.get("brief")))
+        user = prompts.edit_user(instruction, html, meta.get("selection"), "\n\n".join(n for n in notes if n))
 
         error = ""
         while tier:
@@ -82,7 +91,8 @@ async def edit(project_id: str, instruction: str) -> dict:
                 summary = _parse_summary(raw) or "Updated your website."
                 version = store.commit(project_id, {"index.html": new_html}, summary, instruction, tier)
                 return _done(project_id, version)
-            except EditFailed as e:
+            except (EditFailed, llm.LLMTruncated) as e:
+                # A patch that ran out of room is as useless as one that doesn't apply.
                 error = str(e)
                 tier = ESCALATION[tier]
                 if tier:
@@ -126,23 +136,66 @@ def describe(project_id: str) -> str:
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _research_for_generate(project_id: str, description: str) -> str:
+async def _plan_site(project_id: str, description: str) -> tuple[str, dict]:
+    """Researcher first, then the rest of the team in parallel. Returns (notes for the architect, brief)."""
     brief = await research.brief(description)
-    images = await research.find_images(project_id, brief.get("images", []))
-    if brief:
-        store.set_brief(project_id, brief)
-    _publish_research(project_id, brief, images)
-    return research.notes_for_prompt(brief, images)
+    events.publish(project_id, {"type": "job_stage", "tier": "team"})
+    images, typography, copy = await asyncio.gather(
+        research.find_images(project_id, brief.get("images", [])),
+        fontknight.pick(brief, description),
+        copywriter.write(brief, description) if brief else _nothing(),
+    )
+    brief["typography"] = typography
+    store.set_brief(project_id, brief)
+    _publish_research(project_id, brief if brief.get("sections") else None, images)
+    events.publish(project_id, {"type": "agent_note", "agent": "fontknight", "summary": fontknight.summary(typography), "fonts": typography})
+    if copy:
+        events.publish(project_id, {"type": "agent_note", "agent": "copywriter", "summary": copywriter.summary(copy)})
+    notes = [research.notes_for_prompt(brief if brief.get("sections") else None, images), fontknight.notes_for_prompt(typography)]
+    if copy:
+        notes.append(copywriter.notes_for_prompt(copy))
+    return "\n\n".join(n for n in notes if n), brief
+
+
+async def _nothing() -> dict:
+    return {}
+
+
+async def _review(project_id: str, html: str, brief: dict) -> str:
+    """design-critic: one patch pass over a new page. Any problem keeps the architect's version."""
+    if not config.DESIGN_CRITIC:
+        return html
+    events.publish(project_id, {"type": "job_stage", "tier": "critic"})
+    try:
+        raw = await llm.complete(prompts.critic_system(), prompts.critic_user(html, _brief_reminder(brief)), "critic", PATCH_MAX_TOKENS)
+    except llm.LLMError as e:
+        log.warning("design critic skipped: %s", e)
+        return html
+    reviewed, applied = html, 0
+    for search, replace in BLOCK_RE.findall(raw.replace("\r\n", "\n")):
+        try:
+            reviewed = _apply_one(reviewed, search, replace)
+            applied += 1
+        except EditFailed:
+            continue  # one stale fix shouldn't throw away the others
+    if applied:
+        reviewed = _clean_text(reviewed)
+        try:
+            _validate(reviewed)
+        except EditFailed:
+            return html
+    note = f"Design critic made {applied} fix{'es' if applied != 1 else ''}" if applied else "Design critic signed off with no changes"
+    events.publish(project_id, {"type": "agent_note", "agent": "critic", "summary": note})
+    return reviewed
 
 
 def _publish_research(project_id: str, brief: dict | None, images: list[dict]) -> None:
     parts = []
     if brief:
         sections = [s.get("id", "?") for s in brief.get("sections", []) if isinstance(s, dict)]
-        fonts = brief.get("fonts", {})
         parts.append(f"planned {len(sections)} sections ({', '.join(sections)})")
-        if fonts:
-            parts.append(f"fonts {fonts.get('heading')} + {fonts.get('body')}")
+        if (brief.get("style") or {}).get("direction"):
+            parts.append(f"art direction: {brief['style']['direction']}")
     parts.append(f"found {len(images)} photo{'s' if len(images) != 1 else ''}")
     events.publish(project_id, {
         "type": "research_done",
@@ -153,11 +206,14 @@ def _publish_research(project_id: str, brief: dict | None, images: list[dict]) -
 
 
 def _brief_reminder(brief: dict | None) -> str:
-    """Keeps palette and fonts consistent when an edit adds new content."""
+    """Keeps palette, type and icons consistent when an edit adds new content."""
     if not brief:
         return ""
-    keep = {k: brief[k] for k in ("palette", "fonts", "tone") if k in brief}
-    return "Design brief to stay consistent with:\n" + json.dumps(keep)
+    keep = {k: brief[k] for k in ("palette", "fonts", "tone", "style") if k in brief}
+    text = "Design brief to stay consistent with:\n" + json.dumps(keep)
+    if brief.get("typography"):
+        text += "\n\n" + fontknight.notes_for_prompt(brief["typography"])
+    return text
 
 
 def _done(project_id: str, version: dict) -> dict:

@@ -1,0 +1,16 @@
+spec_version: "0.1.0"
+name: copywriter
+version: 1.0.0
+description: >
+  Copywriting sub-agent. Runs after the researcher, in parallel with
+  font-knight: writes the hero headline, calls to action and the copy for
+  every planned section (menu items with prices, services, reviews, FAQ)
+  in the tone of the brief.
+
+model:
+  preferred: "anthropic:claude-haiku-5-5"
+  fallback: ["groq:qwen/qwen3.8-27b", "openai:gpt-4.1-mini"]
+
+tools: []
+
+skills: [web-copy]

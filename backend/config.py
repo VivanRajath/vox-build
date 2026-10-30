@@ -96,11 +96,18 @@ RATE_LIMIT_FALLBACKS = {
 }
 
 
+# Helper agents borrow a developer tier's model. The planners run on the fast
+# model (its own rate-limit quota on Groq); the design critic needs the stronger one.
+AGENT_TIER = {"research": "jnr", "fontknight": "jnr", "copywriter": "jnr", "critic": "snr"}
+
+# Set DESIGN_CRITIC=0 to skip the review pass on new sites (saves one model call).
+DESIGN_CRITIC = os.getenv("DESIGN_CRITIC", "1") != "0"
+
+
 def model_for(tier: str) -> str:
     override = os.getenv(f"MODEL_{tier.upper()}")
     if override:
         return override
-    if tier == "research":
-        # The researcher runs on the fast model (its own rate-limit quota on Groq).
-        return model_for("jnr")
+    if tier in AGENT_TIER:
+        return model_for(AGENT_TIER[tier])
     return DEFAULT_MODELS.get(LLM_PROVIDER, {}).get(tier, "")

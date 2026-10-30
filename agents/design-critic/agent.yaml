@@ -1,0 +1,16 @@
+spec_version: "0.1.0"
+name: design-critic
+version: 1.0.0
+description: >
+  Review sub-agent. Reads every newly built page against the design
+  principles (hierarchy, spacing, contrast, layout variety, states,
+  accessibility, mobile) and returns small SEARCH/REPLACE fixes for the
+  problems that hurt it most. A failed review keeps the architect's page.
+
+model:
+  preferred: "anthropic:claude-sonnet-5-5"
+  fallback: ["groq:openai/gpt-oss-120b", "openai:gpt-4.1"]
+
+tools: [file-read, file-write]
+
+skills: [apply-edit, design-review]

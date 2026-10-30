@@ -11,7 +11,15 @@ import GitHubModal from "./components/GitHubModal.jsx";
 import Composer from "./components/Composer.jsx";
 import { DownloadIcon, GitHubIcon, LinkIcon, Logo } from "./components/icons.jsx";
 
-const TIER_LABEL = { research: "Researcher", jnr: "Junior dev", snr: "Senior dev", architect: "Architect" };
+const TIER_LABEL = {
+  research: "Researcher",
+  team: "Font Knight and Copywriter",
+  architect: "Architect",
+  critic: "Design critic",
+  jnr: "Junior dev",
+  snr: "Senior dev",
+};
+const AGENT_LABEL = { fontknight: "Font Knight", copywriter: "Copywriter", critic: "Design critic" };
 
 function useProjectId() {
   const [projectId, setProjectId] = useState(() => new URLSearchParams(location.search).get("p"));
@@ -96,6 +104,9 @@ export default function App() {
             palette: ev.palette,
             images: (ev.images || []).map((img) => ({ ...img, src: `/preview/${projectId}/${img.path}` })),
           });
+          break;
+        case "agent_note":
+          addLog({ kind: "research", who: AGENT_LABEL[ev.agent] || ev.agent, text: ev.summary, fonts: ev.fonts });
           break;
         case "job_escalated":
           setBusy((b) => (b ? { ...b, tier: ev.tier } : b));

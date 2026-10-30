@@ -1,0 +1,16 @@
+spec_version: "0.1.0"
+name: font-knight
+version: 1.0.0
+description: >
+  Typography and icon sub-agent. Runs after the researcher: searches the live
+  Google Fonts catalogue for a heading and body pairing that fits the brief's
+  art direction, and finds Lucide icons for each concept the site needs. Only
+  real family and icon names reach the developers.
+
+model:
+  preferred: "anthropic:claude-haiku-5-5"
+  fallback: ["groq:qwen/qwen3.8-27b", "openai:gpt-4.1-mini"]
+
+tools: [font-search, icon-search]
+
+skills: [typography]
